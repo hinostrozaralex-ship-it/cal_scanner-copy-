@@ -1,0 +1,39 @@
+name: Compilar APK Android
+
+on:
+  workflow_dispatch: # Permite lanzar la compilación manualmente con un clic
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar codigo fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Descargar dependencias
+        run: flutter pub get
+
+      - name: Crear archivo .env
+        run: |
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
+
+      - name: Compilar APK
+        run: flutter build apk --release
+
+      - name: Subir APK como artefacto descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-cal-scanner-release
+          path: build/app/outputs/flutter-apk/app-release.apk
