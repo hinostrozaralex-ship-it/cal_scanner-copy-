@@ -17,6 +17,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:image_picker/image_picker.dart';
 import '../widgets/daily_tracker.dart';
 import '../widgets/meal_list.dart';
+import '../widgets/settings_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,6 +36,23 @@ class _HomeScreenState extends State<HomeScreen> {
           style: AppTypography.displaySmall.copyWith(fontSize: 19.sp),
         ),
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.settings,
+              color: AppColors.kBlack,
+              size: 24.sp,
+            ),
+            tooltip: 'Ajustes',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => const SettingsDialog(),
+              );
+            },
+          ),
+          SizedBox(width: 8.w),
+        ],
       ),
       body: SafeArea(
         bottom: false,

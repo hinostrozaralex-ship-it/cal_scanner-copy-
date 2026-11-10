@@ -4,18 +4,33 @@ import 'package:dartz/dartz.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../../core/di/service_locator.dart';
+import '../../../../core/storage/api_key_storage.dart';
 import '../models/food_item.dart';
 
 class FoodService {
-  String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
+  Future<String?> _resolveApiKey() async {
+    if (sl.isRegistered<ApiKeyStorage>()) {
+      return sl<ApiKeyStorage>().getApiKey();
+    }
+    final envKey = dotenv.env['GEMINI_API_KEY']?.trim();
+    if (envKey != null && envKey.isNotEmpty) {
+      return envKey;
+    }
+    return null;
+  }
 
   Future<Either<String, FoodItem>> detectFoodAndCalories(File imageFile) async {
     try {
       if (!imageFile.existsSync()) {
         return Left('File not found: ${imageFile.path}');
       }
-      if (_apiKey.isEmpty) {
-        throw Exception('Missing GEMINI_API_KEY');
+
+      final apiKey = await _resolveApiKey();
+      if (apiKey == null || apiKey.isEmpty) {
+        return const Left(
+          'Por favor, ingresa tu Gemini API Key en los Ajustes',
+        );
       }
 
       final imageBytes = await imageFile.readAsBytes();
@@ -23,7 +38,7 @@ class FoodService {
 
       final response = await http.post(
         Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$_apiKey',
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey',
         ),
         headers: {
           'Content-Type': 'application/json',
@@ -55,7 +70,7 @@ class FoodService {
       );
 
       if (response.statusCode != 200) {
-        return Left('API error: ${response.body}');
+        return Left('Error API ${response.statusCode}: ${response.body}');
       }
 
       final data = jsonDecode(response.body);

@@ -2,38 +2,42 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:fpdart/fpdart.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../../core/error/failure.dart';
-import '../../../../core/network/api_service.dart';
+import '../../../../core/storage/api_key_storage.dart';
 import '../../domain/entities/food.dart';
 
 class FoodRemoteDataSource {
-  final ApiService _api;
-  FoodRemoteDataSource(this._api);
-
-  String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
+  final ApiKeyStorage _apiKeyStorage;
+  FoodRemoteDataSource(this._apiKeyStorage);
 
   Future<Either<Failure, Food>> detectFoodAndCalories(File imageFile) async {
     try {
       if (!imageFile.existsSync()) {
         return left(CacheFailure('File not found', cause: imageFile.path));
       }
-      if (_apiKey.isEmpty) {
-        return left(const NetworkFailure('Missing GEMINI_API_KEY'));
+
+      final apiKey = await _apiKeyStorage.getApiKey();
+      if (apiKey == null || apiKey.isEmpty) {
+        return left(
+          const NetworkFailure(
+            'Por favor, ingresa tu Gemini API Key en los Ajustes',
+          ),
+        );
       }
 
       final imageBytes = await imageFile.readAsBytes();
       final base64Image = base64Encode(imageBytes);
 
-      final response = await _api.postJson(
+      final response = await http.post(
         Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$_apiKey',
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey',
         ),
         headers: {
           'Content-Type': 'application/json',
         },
-        body: {
+        body: jsonEncode({
           'contents': [
             {
               'parts': [
@@ -56,55 +60,60 @@ class FoodRemoteDataSource {
           'generationConfig': {
             'responseMimeType': 'application/json',
           },
-        },
+        }),
       );
 
-      return response.flatMap((data) {
-        try {
-          final output =
-              data['candidates']?[0]?['content']?['parts']?[0]?['text'];
-          if (output is! String) {
-            return left(NetworkFailure('Invalid API response', cause: data));
-          }
+      if (response.statusCode != 200) {
+        return left(
+          NetworkFailure(
+            'Error API ${response.statusCode}: ${response.body}',
+            cause: response.body,
+          ),
+        );
+      }
 
-          final cleanedOutput = output
-              .replaceAll(RegExp(r'```json\s*', caseSensitive: false), '')
-              .replaceAll('```', '')
-              .trim();
+      final data = jsonDecode(response.body);
+      final output =
+          data['candidates']?[0]?['content']?['parts']?[0]?['text'];
+      if (output is! String) {
+        return left(
+          NetworkFailure('Invalid API response: ${response.body}', cause: data),
+        );
+      }
 
-          final match = RegExp(r'\{.*\}', dotAll: true).firstMatch(cleanedOutput);
-          if (match == null) {
-            return left(
-              NetworkFailure('No JSON found in response', cause: output),
-            );
-          }
+      final cleanedOutput = output
+          .replaceAll(RegExp(r'```json\s*', caseSensitive: false), '')
+          .replaceAll('```', '')
+          .trim();
 
-          final foodData = jsonDecode(match.group(0)!);
-          if (foodData is! Map) {
-            return left(
-              NetworkFailure('Invalid JSON in response', cause: output),
-            );
-          }
+      final match = RegExp(r'\{.*\}', dotAll: true).firstMatch(cleanedOutput);
+      if (match == null) {
+        return left(
+          NetworkFailure('No JSON found in response: $output', cause: output),
+        );
+      }
 
-          return right(
-            Food(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              name: foodData['name'] as String,
-              calories: (foodData['calories'] as num).toDouble(),
-              protein: (foodData['protein'] as num).toDouble(),
-              carbs: (foodData['carbs'] as num).toDouble(),
-              fat: (foodData['fat'] as num).toDouble(),
-              quantity: 100.0,
-              timestamp: DateTime.now(),
-            ),
-          );
-        } catch (e) {
-          return left(NetworkFailure('Failed to parse API response', cause: e));
-        }
-      });
+      final foodData = jsonDecode(match.group(0)!);
+      if (foodData is! Map) {
+        return left(
+          NetworkFailure('Invalid JSON in response: $output', cause: output),
+        );
+      }
+
+      return right(
+        Food(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          name: foodData['name'] as String,
+          calories: (foodData['calories'] as num).toDouble(),
+          protein: (foodData['protein'] as num).toDouble(),
+          carbs: (foodData['carbs'] as num).toDouble(),
+          fat: (foodData['fat'] as num).toDouble(),
+          quantity: 100.0,
+          timestamp: DateTime.now(),
+        ),
+      );
     } catch (e) {
-      return left(NetworkFailure('Failed to detect food', cause: e));
+      return left(NetworkFailure('Failed to detect food: $e', cause: e));
     }
   }
 }
-
