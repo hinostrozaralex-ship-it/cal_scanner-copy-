@@ -8,7 +8,17 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/storage/local_storage_service.dart';
 import '../models/food_item.dart';
 
+const String primaryModel = 'gemini-3.8-flash';
+const String fallbackModel = 'gemini-2.5-flash';
+const String highDemandErrorMessage =
+    "Los servidores de IA están experimentando alta demanda en este momento. Por favor, pulsa 'Retake' y prueba de nuevo en unos segundos.";
+
 class FoodService {
+  static const String primaryModel = 'gemini-3.8-flash';
+  static const String fallbackModel = 'gemini-2.5-flash';
+  static const String highDemandErrorMessage =
+      "Los servidores de IA están experimentando alta demanda en este momento. Por favor, pulsa 'Retake' y prueba de nuevo en unos segundos.";
+
   Future<String?> _resolveApiKey() async {
     if (sl.isRegistered<LocalStorageService>()) {
       final storage = sl<LocalStorageService>();
@@ -36,6 +46,55 @@ class FoodService {
     return null;
   }
 
+  Future<http.Response> _sendGenerateContentRequest({
+    required String model,
+    required String apiKey,
+    required String base64Image,
+  }) {
+    final url = Uri.parse(
+      'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent',
+    );
+
+    final generationConfig = <String, dynamic>{
+      'responseMimeType': 'application/json',
+    };
+
+    if (model.contains('3.')) {
+      generationConfig['thinkingConfig'] = {
+        'thinkingLevel': 'LOW',
+      };
+    }
+
+    return http
+        .post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: jsonEncode({
+            'contents': [
+              {
+                'parts': [
+                  {
+                    'text':
+                        'Analyze this food item. Return ONLY a valid raw JSON object with keys: name (string), calories (number), protein (number), carbs (number), fat (number). Do not include markdown codeblocks or extra text.',
+                  },
+                  {
+                    'inline_data': {
+                      'mime_type': 'image/jpeg',
+                      'data': base64Image,
+                    },
+                  },
+                ],
+              },
+            ],
+            'generationConfig': generationConfig,
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
+  }
+
   Future<Either<String, FoodItem>> detectFoodAndCalories(File imageFile) async {
     try {
       if (!imageFile.existsSync()) {
@@ -52,43 +111,25 @@ class FoodService {
       final imageBytes = await imageFile.readAsBytes();
       final base64Image = base64Encode(imageBytes);
 
-      final url = Uri.parse(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
+      http.Response response = await _sendGenerateContentRequest(
+        model: primaryModel,
+        apiKey: apiKey,
+        base64Image: base64Image,
       );
 
-      final response = await http
-          .post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': apiKey,
-            },
-            body: jsonEncode({
-              'contents': [
-                {
-                  'parts': [
-                    {
-                      'text':
-                          'Analyze this food item. Return ONLY a valid raw JSON object with keys: name (string), calories (number), protein (number), carbs (number), fat (number). Do not include markdown codeblocks or extra text.',
-                    },
-                    {
-                      'inline_data': {
-                        'mime_type': 'image/jpeg',
-                        'data': base64Image,
-                      },
-                    },
-                  ],
-                },
-              ],
-              'generationConfig': {
-                'responseMimeType': 'application/json',
-                'thinkingConfig': {
-                  'thinkingLevel': 'LOW',
-                },
-              },
-            }),
-          )
-          .timeout(const Duration(seconds: 60));
+      // Si el modelo principal responde con 503 (alta demanda) o 429 (rate limit),
+      // reintenta inmediatamente con el modelo de respaldo.
+      if (response.statusCode == 503 || response.statusCode == 429) {
+        response = await _sendGenerateContentRequest(
+          model: fallbackModel,
+          apiKey: apiKey,
+          base64Image: base64Image,
+        );
+
+        if (response.statusCode == 503 || response.statusCode == 429) {
+          return const Left(highDemandErrorMessage);
+        }
+      }
 
       if (response.statusCode != 200) {
         return Left('Error ${response.statusCode}: ${response.body}');
