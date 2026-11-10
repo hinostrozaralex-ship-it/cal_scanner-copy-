@@ -1,4 +1,6 @@
+import 'package:cal_scanner/core/storage/local_storage_service.dart';
 import 'package:cal_scanner/features/calories/presentation/screens/home_screen.dart';
+import 'package:cal_scanner/features/calories/presentation/screens/settings_screen.dart';
 import 'package:cal_scanner/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:cal_scanner/features/onboarding/presentation/screens/splash.dart';
 import 'package:go_router/go_router.dart';
@@ -28,15 +30,20 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.main,
         name: AppRoutes.main,
-        builder: (context, state) => const HomeScreen(), // ← no child needed
+        builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settings,
+        name: AppRoutes.settings,
+        builder: (context, state) => const SettingsScreen(),
       ),
     ],
     redirect: (context, state) {
-      final onboardingDone = prefs.getBool('onboarding_complete') ?? false;
+      final isOnboarded = LocalStorageService(prefs).isUserOnboardedSync();
       final location = state.matchedLocation;
       final isSplash = location == AppRoutes.splash;
       if (isSplash) return null;
-      if (!onboardingDone) return AppRoutes.onboarding;
+      if (!isOnboarded) return AppRoutes.onboarding;
       return null;
     },
   );

@@ -1,8 +1,9 @@
+import 'package:cal_scanner/core/di/service_locator.dart';
+import 'package:cal_scanner/core/storage/local_storage_service.dart';
 import 'package:cal_scanner/gen/assets.gen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../core/routes/app_routes.dart';
 
@@ -25,11 +26,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final onboardingDone = prefs.getBool('onboarding_complete') ?? false;
+    final userProfile = await sl<LocalStorageService>().getUserProfile();
+    final isOnboarded = userProfile?.isOnboarded ?? false;
 
     if (!mounted) return;
-    context.go(onboardingDone ? AppRoutes.main : AppRoutes.onboarding);
+    context.go(isOnboarded ? AppRoutes.main : AppRoutes.onboarding);
   }
 
   @override

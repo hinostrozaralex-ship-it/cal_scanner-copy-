@@ -110,11 +110,25 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         } else if (!state.isScanning && _dialogShown) {
           _dismissDialog(context);
 
-          // Latch the meal and error into local state the first time
-          // they arrive — after this, cubit re-emits can't wipe them.
-          if (state.scannedMeal != null || state.error != null) {
+          if (state.scannedMeal != null) {
+            final detected = state.scannedMeal!;
+            final messenger = ScaffoldMessenger.of(context);
+            Navigator.of(context).pop();
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Comida registrada: ${detected.name.capitalizeFirst()} (${detected.calories.toStringAsFixed(0)} kcal)',
+                  style: AppTypography.bodyMedium.copyWith(color: Colors.white),
+                ),
+                backgroundColor: Colors.black87,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            return;
+          }
+
+          if (state.error != null) {
             setState(() {
-              _meal = state.scannedMeal;
               _error = state.error;
             });
           }

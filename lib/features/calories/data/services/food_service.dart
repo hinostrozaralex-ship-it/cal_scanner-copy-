@@ -5,17 +5,33 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../../core/di/service_locator.dart';
-import '../../../../core/storage/api_key_storage.dart';
+import '../../../../core/storage/local_storage_service.dart';
 import '../models/food_item.dart';
 
 class FoodService {
   Future<String?> _resolveApiKey() async {
-    if (sl.isRegistered<ApiKeyStorage>()) {
-      return sl<ApiKeyStorage>().getApiKey();
+    if (sl.isRegistered<LocalStorageService>()) {
+      final storage = sl<LocalStorageService>();
+      final profile = await storage.getUserProfile();
+      final profileKey = profile?.apiKey?.trim();
+      if (profileKey != null && profileKey.isNotEmpty) {
+        return profileKey;
+      }
+      final storedKey = await storage.getApiKey();
+      if (storedKey != null && storedKey.isNotEmpty) {
+        return storedKey;
+      }
     }
-    final envKey = dotenv.env['GEMINI_API_KEY']?.trim();
-    if (envKey != null && envKey.isNotEmpty) {
-      return envKey;
+    try {
+      final envKey = dotenv.env['GEMINI_API_KEY']?.trim();
+      if (envKey != null &&
+          envKey.isNotEmpty &&
+          envKey != 'tu_api_key_aqui' &&
+          envKey != 'your_api_key_here') {
+        return envKey;
+      }
+    } catch (_) {
+      // dotenv may not be initialized
     }
     return null;
   }
@@ -38,7 +54,7 @@ class FoodService {
 
       final response = await http.post(
         Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey',
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey',
         ),
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +86,7 @@ class FoodService {
       );
 
       if (response.statusCode != 200) {
-        return Left('Error API ${response.statusCode}: ${response.body}');
+        return Left('Error ${response.statusCode}: ${response.body}');
       }
 
       final data = jsonDecode(response.body);

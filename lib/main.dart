@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/di/service_locator.dart';
+import 'core/storage/local_storage_service.dart';
 import 'features/calories/presentation/cubit/food_log_cubit.dart';
 import 'features/onboarding/presentation/cubit/onboarding_cubit.dart';
 import 'theme/app_typography.dart';
@@ -27,7 +28,8 @@ void main() async {
   await _loadEnvironmentFile();
 
   final prefs = await SharedPreferences.getInstance();
-  final showOnboarding = !(prefs.getBool('onboarding_complete') ?? false);
+  final userProfile = await LocalStorageService(prefs).getUserProfile();
+  final showOnboarding = !(userProfile?.isOnboarded ?? false);
 
   await configureDependencies(prefs: prefs, showOnboarding: showOnboarding);
 

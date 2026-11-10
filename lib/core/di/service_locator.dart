@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../network/api_service.dart';
 import '../routes/router.dart';
 import '../storage/api_key_storage.dart';
+import '../storage/local_storage_service.dart';
 import '../../features/calories/data/datasources/food_local_datasource.dart';
 import '../../features/calories/data/datasources/food_remote_datasource.dart';
 import '../../features/calories/data/repositories/food_repository_impl.dart';
@@ -37,6 +38,7 @@ Future<void> configureDependencies({
 
   // Core
   sl.registerLazySingleton<ApiService>(() => ApiService(sl()));
+  sl.registerLazySingleton<LocalStorageService>(() => LocalStorageService(sl()));
   sl.registerLazySingleton<ApiKeyStorage>(() => ApiKeyStorage(sl()));
   sl.registerLazySingleton<AppRouter>(
     () => AppRouter(showOnboarding: showOnboarding, prefs: sl()),

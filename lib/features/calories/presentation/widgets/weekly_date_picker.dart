@@ -43,6 +43,14 @@ class _WeekDatePickerState extends State<WeekDatePicker> {
     _scrollController.addListener(_onScroll);
   }
 
+  @override
+  void didUpdateWidget(covariant WeekDatePicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isSameDay(oldWidget.selectedDate, widget.selectedDate)) {
+      _cubit.selectDate(widget.selectedDate);
+    }
+  }
+
   void _onScroll() {
     final offset = _scrollController.offset;
     final dates = _cubit.state.dates;
@@ -51,6 +59,25 @@ class _WeekDatePickerState extends State<WeekDatePicker> {
       dates.length - 1,
     );
     _cubit.updateVisibleMonth(dates[centerIndex]);
+  }
+
+  void _jumpToToday() {
+    final today = DateTime.now();
+    final normalizedToday = DateTime(today.year, today.month, today.day);
+    final startDate = DateTime(today.year, 1, 1);
+    final todayIndex = normalizedToday.difference(startDate).inDays;
+    final targetOffset = (todayIndex * _itemWidth) - 160;
+
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        targetOffset < 0 ? 0 : targetOffset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+
+    _cubit.selectDate(normalizedToday);
+    widget.onDateSelected(normalizedToday);
   }
 
   @override
@@ -67,24 +94,24 @@ class _WeekDatePickerState extends State<WeekDatePicker> {
   bool _isToday(DateTime date) => _isSameDay(date, DateTime.now());
 
   String _dayLabel(DateTime date) {
-    const labels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const labels = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
     return labels[date.weekday - 1];
   }
 
   String _monthYearLabel(DateTime date) {
     const months = [
-      'JANUARY',
-      'FEBRUARY',
-      'MARCH',
-      'APRIL',
-      'MAY',
-      'JUNE',
-      'JULY',
-      'AUGUST',
-      'SEPTEMBER',
-      'OCTOBER',
-      'NOVEMBER',
-      'DECEMBER',
+      'ENERO',
+      'FEBRERO',
+      'MARZO',
+      'ABRIL',
+      'MAYO',
+      'JUNIO',
+      'JULIO',
+      'AGOSTO',
+      'SEPTIEMBRE',
+      'OCTUBRE',
+      'NOVIEMBRE',
+      'DICIEMBRE',
     ];
     return '${months[date.month - 1]} ${date.year}';
   }
@@ -97,14 +124,55 @@ class _WeekDatePickerState extends State<WeekDatePicker> {
     return BlocBuilder<WeekDatePickerCubit, WeekDatePickerState>(
       bloc: _cubit,
       builder: (context, state) {
+        final isSelectedToday = _isToday(state.selectedDate);
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              _monthYearLabel(state.visibleMonthDate),
-              style: AppTypography.headlineSmall.copyWith(color: dateColor),
-            ).paddingOnly(left: 20),
-
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _monthYearLabel(state.visibleMonthDate),
+                  style: AppTypography.headlineSmall.copyWith(color: dateColor),
+                ),
+                GestureDetector(
+                  onTap: _jumpToToday,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 12.w,
+                      vertical: 5.h,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelectedToday
+                          ? dateColor.withValues(alpha: 0.14)
+                          : AppColors.kBlack,
+                      borderRadius: BorderRadius.circular(20.r),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.today_rounded,
+                          size: 14.sp,
+                          color: isSelectedToday ? dateColor : AppColors.kWhite,
+                        ),
+                        SizedBox(width: 4.w),
+                        Text(
+                          'Hoy',
+                          style: AppTypography.labelMedium.copyWith(
+                            color:
+                                isSelectedToday ? dateColor : AppColors.kWhite,
+                            fontSize: 12.sp,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ).paddingSymmetric(horizontal: 20.w),
+            SizedBox(height: 6.h),
             SizedBox(
               height: 60.h,
               child: ListView.builder(
@@ -127,7 +195,7 @@ class _WeekDatePickerState extends State<WeekDatePicker> {
                             widget.onDateSelected(date);
                           },
                     child: Container(
-                      margin: EdgeInsets.symmetric(horizontal: 2),
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
                       decoration: BoxDecoration(
                         color: isSelected ? dateColor : Colors.transparent,
                         borderRadius: BorderRadius.circular(16),
@@ -143,9 +211,11 @@ class _WeekDatePickerState extends State<WeekDatePicker> {
                               color: isSelected
                                   ? AppColors.kWhite
                                   : isFuture
-                                  ? AppColors.kgrey
-                                  : Theme.of(context).colorScheme.onSurface
-                                        .withValues(alpha: 0.5),
+                                      ? AppColors.kgrey
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.5),
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -158,8 +228,8 @@ class _WeekDatePickerState extends State<WeekDatePicker> {
                               color: isSelected
                                   ? AppColors.kWhite
                                   : isFuture
-                                  ? AppColors.kgrey
-                                  : AppColors.kBlack,
+                                      ? AppColors.kgrey
+                                      : AppColors.kBlack,
                             ),
                           ),
                         ],

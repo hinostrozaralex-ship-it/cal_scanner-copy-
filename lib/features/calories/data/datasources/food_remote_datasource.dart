@@ -1,16 +1,45 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../../core/error/failure.dart';
-import '../../../../core/storage/api_key_storage.dart';
+import '../../../../core/storage/local_storage_service.dart';
 import '../../domain/entities/food.dart';
 
 class FoodRemoteDataSource {
-  final ApiKeyStorage _apiKeyStorage;
-  FoodRemoteDataSource(this._apiKeyStorage);
+  final LocalStorageService _localStorage;
+
+  FoodRemoteDataSource(this._localStorage);
+
+  Future<String?> _resolveApiKey() async {
+    final userProfile = await _localStorage.getUserProfile();
+    final profileKey = userProfile?.apiKey?.trim();
+    if (profileKey != null && profileKey.isNotEmpty) {
+      return profileKey;
+    }
+
+    final storedKey = await _localStorage.getApiKey();
+    if (storedKey != null && storedKey.isNotEmpty) {
+      return storedKey;
+    }
+
+    try {
+      final envKey = dotenv.env['GEMINI_API_KEY']?.trim();
+      if (envKey != null &&
+          envKey.isNotEmpty &&
+          envKey != 'tu_api_key_aqui' &&
+          envKey != 'your_api_key_here') {
+        return envKey;
+      }
+    } catch (_) {
+      // dotenv may not be initialized
+    }
+
+    return null;
+  }
 
   Future<Either<Failure, Food>> detectFoodAndCalories(File imageFile) async {
     try {
@@ -18,7 +47,7 @@ class FoodRemoteDataSource {
         return left(CacheFailure('File not found', cause: imageFile.path));
       }
 
-      final apiKey = await _apiKeyStorage.getApiKey();
+      final apiKey = await _resolveApiKey();
       if (apiKey == null || apiKey.isEmpty) {
         return left(
           const NetworkFailure(
@@ -32,7 +61,7 @@ class FoodRemoteDataSource {
 
       final response = await http.post(
         Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey',
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey',
         ),
         headers: {
           'Content-Type': 'application/json',
@@ -66,7 +95,7 @@ class FoodRemoteDataSource {
       if (response.statusCode != 200) {
         return left(
           NetworkFailure(
-            'Error API ${response.statusCode}: ${response.body}',
+            'Error ${response.statusCode}: ${response.body}',
             cause: response.body,
           ),
         );

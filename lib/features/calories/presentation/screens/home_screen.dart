@@ -7,6 +7,7 @@ import 'package:cal_scanner/core/extensions/widget_extension.dart';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_cubit.dart';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_state.dart';
 import 'package:cal_scanner/features/calories/presentation/screens/scan_result_screen.dart';
+import 'package:cal_scanner/features/calories/presentation/screens/settings_screen.dart';
 import 'package:cal_scanner/features/calories/presentation/widgets/weekly_date_picker.dart';
 import 'package:cal_scanner/theme/app_colors.dart';
 import 'package:cal_scanner/theme/app_typography.dart';
@@ -17,7 +18,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:image_picker/image_picker.dart';
 import '../widgets/daily_tracker.dart';
 import '../widgets/meal_list.dart';
-import '../widgets/settings_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,6 +27,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _profileRefreshTick = 0;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -43,12 +45,19 @@ class _HomeScreenState extends State<HomeScreen> {
               color: AppColors.kBlack,
               size: 24.sp,
             ),
-            tooltip: 'Ajustes',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (_) => const SettingsDialog(),
+            tooltip: 'Ajustes y Perfil',
+            onPressed: () async {
+              final updated = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SettingsScreen(),
+                ),
               );
+              if (updated == true && mounted) {
+                setState(() {
+                  _profileRefreshTick++;
+                });
+              }
             },
           ),
           SizedBox(width: 8.w),
@@ -79,8 +88,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(height: 24),
+                      const SizedBox(height: 24),
                       DailyTracker(
+                        key: ValueKey(_profileRefreshTick),
                         calories: state.totalCalories,
                         protein: state.totalProtein,
                         carbs: state.totalCarbs,
