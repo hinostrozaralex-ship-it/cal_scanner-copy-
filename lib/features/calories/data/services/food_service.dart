@@ -82,10 +82,13 @@ class FoodService {
               ],
               'generationConfig': {
                 'responseMimeType': 'application/json',
+                'thinkingConfig': {
+                  'thinkingLevel': 'LOW',
+                },
               },
             }),
           )
-          .timeout(const Duration(seconds: 25));
+          .timeout(const Duration(seconds: 60));
 
       if (response.statusCode != 200) {
         return Left('Error ${response.statusCode}: ${response.body}');
