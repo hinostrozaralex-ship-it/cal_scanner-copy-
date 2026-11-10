@@ -59,38 +59,40 @@ class FoodRemoteDataSource {
       final imageBytes = await imageFile.readAsBytes();
       final base64Image = base64Encode(imageBytes);
 
-      final response = await http.post(
-        Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=$apiKey',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'contents': [
-            {
-              'parts': [
+      final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
+      );
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey,
+            },
+            body: jsonEncode({
+              'contents': [
                 {
-                  'inline_data': {
-                    'mime_type': 'image/jpeg',
-                    'data': base64Image,
-                  },
-                },
-                {
-                  'text':
-                      'Analyze this image and identify the food. '
-                      'Estimate its calories, protein, carbs, and fat. '
-                      'Return JSON only, no markdown, no explanation, in this exact format: '
-                      '{"name": "food name", "calories": 100, "protein": 10, "carbs": 20, "fat": 5}',
+                  'parts': [
+                    {
+                      'text':
+                          'Analyze this food item. Return ONLY a valid raw JSON object with keys: name (string), calories (number), protein (number), carbs (number), fat (number). Do not include markdown codeblocks or extra text.',
+                    },
+                    {
+                      'inline_data': {
+                        'mime_type': 'image/jpeg',
+                        'data': base64Image,
+                      },
+                    },
+                  ],
                 },
               ],
-            },
-          ],
-          'generationConfig': {
-            'responseMimeType': 'application/json',
-          },
-        }),
-      );
+              'generationConfig': {
+                'responseMimeType': 'application/json',
+              },
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
 
       if (response.statusCode != 200) {
         return left(

@@ -124,7 +124,12 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: AppColors.kOrange,
         onPressed: () async {
           final picker = ImagePicker();
-          final picked = await picker.pickImage(source: ImageSource.camera);
+          final picked = await picker.pickImage(
+            source: ImageSource.camera,
+            maxWidth: 800,
+            maxHeight: 800,
+            imageQuality: 70,
+          );
           if (picked == null) return;
           final file = File(picked.path);
           if (!context.mounted) return;

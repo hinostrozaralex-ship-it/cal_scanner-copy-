@@ -145,7 +145,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 cursorColor: AppColors.kOrange,
                 style: AppTypography.bodyMedium.copyWith(fontSize: 14.sp),
                 decoration: InputDecoration(
-                  hintText: 'AIzaSy...',
+                  hintText: 'Pega tu Gemini API Key aquí',
                   hintStyle: AppTypography.bodyMedium.copyWith(
                     fontSize: 14.sp,
                     color: AppColors.kBlack.withValues(alpha: 0.4),
