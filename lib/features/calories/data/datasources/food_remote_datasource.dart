@@ -12,7 +12,7 @@ class FoodRemoteDataSource {
   final ApiService _api;
   FoodRemoteDataSource(this._api);
 
-  String get _apiKey => dotenv.env['GROK_API_KEY'] ?? '';
+  String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
 
   Future<Either<Failure, Food>> detectFoodAndCalories(File imageFile) async {
     try {
@@ -20,30 +20,30 @@ class FoodRemoteDataSource {
         return left(CacheFailure('File not found', cause: imageFile.path));
       }
       if (_apiKey.isEmpty) {
-        return left(const NetworkFailure('Missing GROK_API_KEY'));
+        return left(const NetworkFailure('Missing GEMINI_API_KEY'));
       }
 
       final imageBytes = await imageFile.readAsBytes();
       final base64Image = base64Encode(imageBytes);
 
       final response = await _api.postJson(
-        Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
+        Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$_apiKey',
+        ),
         headers: {
-          'Authorization': 'Bearer $_apiKey',
           'Content-Type': 'application/json',
         },
         body: {
-          'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
-          'messages': [
+          'contents': [
             {
-              'role': 'user',
-              'content': [
+              'parts': [
                 {
-                  'type': 'image_url',
-                  'image_url': {'url': 'data:image/jpeg;base64,$base64Image'},
+                  'inline_data': {
+                    'mime_type': 'image/jpeg',
+                    'data': base64Image,
+                  },
                 },
                 {
-                  'type': 'text',
                   'text':
                       'Analyze this image and identify the food. '
                       'Estimate its calories, protein, carbs, and fat. '
@@ -53,25 +53,37 @@ class FoodRemoteDataSource {
               ],
             },
           ],
-          'max_tokens': 200,
+          'generationConfig': {
+            'responseMimeType': 'application/json',
+          },
         },
       );
 
       return response.flatMap((data) {
         try {
-          final output = data['choices']?[0]?['message']?['content'];
+          final output =
+              data['candidates']?[0]?['content']?['parts']?[0]?['text'];
           if (output is! String) {
             return left(NetworkFailure('Invalid API response', cause: data));
           }
 
-          final match = RegExp(r'\\{.*\\}', dotAll: true).firstMatch(output);
+          final cleanedOutput = output
+              .replaceAll(RegExp(r'```json\s*', caseSensitive: false), '')
+              .replaceAll('```', '')
+              .trim();
+
+          final match = RegExp(r'\{.*\}', dotAll: true).firstMatch(cleanedOutput);
           if (match == null) {
-            return left(NetworkFailure('No JSON found in response', cause: output));
+            return left(
+              NetworkFailure('No JSON found in response', cause: output),
+            );
           }
 
           final foodData = jsonDecode(match.group(0)!);
           if (foodData is! Map) {
-            return left(NetworkFailure('Invalid JSON in response', cause: output));
+            return left(
+              NetworkFailure('Invalid JSON in response', cause: output),
+            );
           }
 
           return right(

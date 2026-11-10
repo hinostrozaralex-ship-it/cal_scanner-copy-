@@ -7,36 +7,38 @@ import 'package:http/http.dart' as http;
 import '../models/food_item.dart';
 
 class FoodService {
-  String get _apiKey => dotenv.env['GROK_API_KEY'] ?? '';
+  String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
 
   Future<Either<String, FoodItem>> detectFoodAndCalories(File imageFile) async {
     try {
       if (!imageFile.existsSync()) {
         return Left('File not found: ${imageFile.path}');
       }
+      if (_apiKey.isEmpty) {
+        throw Exception('Missing GEMINI_API_KEY');
+      }
 
       final imageBytes = await imageFile.readAsBytes();
       final base64Image = base64Encode(imageBytes);
 
       final response = await http.post(
-        Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
+        Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$_apiKey',
+        ),
         headers: {
-          'Authorization': 'Bearer $_apiKey',
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'model':
-              'meta-llama/llama-4-scout-17b-16e-instruct', // free vision model
-          'messages': [
+          'contents': [
             {
-              'role': 'user',
-              'content': [
+              'parts': [
                 {
-                  'type': 'image_url',
-                  'image_url': {'url': 'data:image/jpeg;base64,$base64Image'},
+                  'inline_data': {
+                    'mime_type': 'image/jpeg',
+                    'data': base64Image,
+                  },
                 },
                 {
-                  'type': 'text',
                   'text':
                       'Analyze this image and identify the food. '
                       'Estimate its calories, protein, carbs, and fat. '
@@ -46,7 +48,9 @@ class FoodService {
               ],
             },
           ],
-          'max_tokens': 200,
+          'generationConfig': {
+            'responseMimeType': 'application/json',
+          },
         }),
       );
 
@@ -55,9 +59,18 @@ class FoodService {
       }
 
       final data = jsonDecode(response.body);
-      final output = data['choices'][0]['message']['content'] as String;
+      final output =
+          data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String?;
+      if (output == null) {
+        return Left('Invalid API response: ${response.body}');
+      }
 
-      final match = RegExp(r'\{.*\}', dotAll: true).firstMatch(output);
+      final cleanedOutput = output
+          .replaceAll(RegExp(r'```json\s*', caseSensitive: false), '')
+          .replaceAll('```', '')
+          .trim();
+
+      final match = RegExp(r'\{.*\}', dotAll: true).firstMatch(cleanedOutput);
       if (match == null) {
         return Left('No valid JSON found in response: $output');
       }
