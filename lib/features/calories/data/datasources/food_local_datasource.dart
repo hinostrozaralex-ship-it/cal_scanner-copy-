@@ -9,8 +9,8 @@ class FoodLocalDataSource {
   final SharedPreferences _prefs;
   final LocalStorageService _localStorage;
 
-  FoodLocalDataSource(this._prefs)
-      : _localStorage = LocalStorageService(_prefs);
+  FoodLocalDataSource(this._prefs, [LocalStorageService? localStorage])
+      : _localStorage = localStorage ?? LocalStorageService(_prefs);
 
   String _keyForDate(DateTime date) {
     final day = DateTime(date.year, date.month, date.day);

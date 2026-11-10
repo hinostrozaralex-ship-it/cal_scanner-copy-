@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cal_scanner/app_widgets/buttons/back_button.dart';
 import 'package:cal_scanner/core/extensions/capital_first_extension.dart';
 import 'package:cal_scanner/core/extensions/context_extension.dart';
@@ -61,17 +63,28 @@ class MealDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            if (meal.imageUrl != null)
+            if (meal.imageUrl != null && meal.imageUrl!.isNotEmpty)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12.0),
-                child: Image.network(
-                  meal.imageUrl!,
-                  height: 180,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
+                child: meal.imageUrl!.startsWith('http')
+                    ? Image.network(
+                        meal.imageUrl!,
+                        height: 180,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      )
+                    : File(meal.imageUrl!).existsSync()
+                    ? Image.file(
+                        File(meal.imageUrl!),
+                        height: 180,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      )
+                    : const SizedBox.shrink(),
               ),
-            if (meal.imageUrl != null) SizedBox(height: 24),
+            if (meal.imageUrl != null && meal.imageUrl!.isNotEmpty)
+              SizedBox(height: 24),
 
             // Large calorie display
             Text(

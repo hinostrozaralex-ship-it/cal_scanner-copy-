@@ -1,7 +1,5 @@
 import 'dart:io';
 
-import 'package:cal_scanner/core/di/service_locator.dart';
-import 'package:cal_scanner/core/storage/local_storage_service.dart';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -40,31 +38,17 @@ class FoodLogCubit extends Cubit<FoodLogState> {
   Future<void> loadDailyLog({Food? preserveScannedMeal}) async {
     emit(state.copyWith(isLoading: true));
 
-    // Consumir directamente LocalStorageService.getMealsByDate(selectedDate)
-    // manteniendo respaldo con el repositorio local.
-    List<Food> meals = [];
-    if (sl.isRegistered<LocalStorageService>()) {
-      final records = await sl<LocalStorageService>().getMealsByDate(
-        state.selectedDate,
+    final mealsResult = await _getDailyFoodLog(state.selectedDate);
+    if (mealsResult.isLeft()) {
+      emit(
+        state.copyWith(
+          error: mealsResult.fold((l) => l.message, (_) => null),
+          isLoading: false,
+        ),
       );
-      if (records.isNotEmpty) {
-        meals = records.map((r) => r.toFood()).toList();
-      }
+      return;
     }
-
-    if (meals.isEmpty) {
-      final mealsResult = await _getDailyFoodLog(state.selectedDate);
-      if (mealsResult.isLeft()) {
-        emit(
-          state.copyWith(
-            error: mealsResult.fold((l) => l.message, (_) => null),
-            isLoading: false,
-          ),
-        );
-        return;
-      }
-      meals = mealsResult.getOrElse((_) => const <Food>[]);
-    }
+    final meals = mealsResult.getOrElse((_) => const <Food>[]);
 
     final weeklyResult = await _getWeeklyCalories(endDate: DateTime.now());
     final weeklyData = weeklyResult.getOrElse((_) => const <double>[]);
@@ -86,12 +70,9 @@ class FoodLogCubit extends Cubit<FoodLogState> {
   }
 
   Future<void> addMeal(Food meal) async {
-    if (sl.isRegistered<LocalStorageService>()) {
-      await sl<LocalStorageService>().saveMeal(MealRecord.fromFood(meal));
-    }
     final result = await _addFood(meal);
-    result.match(
-      (l) => emit(state.copyWith(error: l.message)),
+    await result.fold(
+      (l) async => emit(state.copyWith(error: l.message)),
       (_) async => loadDailyLog(),
     );
   }
@@ -131,15 +112,23 @@ class FoodLogCubit extends Cubit<FoodLogState> {
       },
       (meal) async {
         final now = DateTime.now();
-        final stampedMeal = meal.copyWith(timestamp: now);
+        final stampedMeal = meal.copyWith(
+          timestamp: now,
+          imageUrl: meal.imageUrl ?? image.path,
+        );
         final todayNormalized = DateTime(now.year, now.month, now.day);
 
-        if (sl.isRegistered<LocalStorageService>()) {
-          await sl<LocalStorageService>().saveMeal(
-            MealRecord.fromFood(stampedMeal),
+        final addResult = await _addFood(stampedMeal);
+        if (addResult.isLeft()) {
+          emit(
+            state.copyWith(
+              error: addResult.fold((l) => l.message, (_) => null),
+              successMessage: null,
+              isScanning: false,
+            ),
           );
+          return;
         }
-        await _addFood(stampedMeal);
 
         emit(
           state.copyWith(
@@ -176,23 +165,17 @@ class FoodLogCubit extends Cubit<FoodLogState> {
   }
 
   Future<void> deleteMeal(Food meal) async {
-    if (sl.isRegistered<LocalStorageService>()) {
-      await sl<LocalStorageService>().deleteMeal(meal.id);
-    }
     final result = await _deleteFood(meal);
-    result.match(
-      (l) => emit(state.copyWith(error: l.message)),
+    await result.fold(
+      (l) async => emit(state.copyWith(error: l.message)),
       (_) async => loadDailyLog(),
     );
   }
 
   Future<void> updateMeal(Food meal) async {
-    if (sl.isRegistered<LocalStorageService>()) {
-      await sl<LocalStorageService>().saveMeal(MealRecord.fromFood(meal));
-    }
     final result = await _updateFood(meal);
-    result.match(
-      (l) => emit(state.copyWith(error: l.message)),
+    await result.fold(
+      (l) async => emit(state.copyWith(error: l.message)),
       (_) async => loadDailyLog(),
     );
   }

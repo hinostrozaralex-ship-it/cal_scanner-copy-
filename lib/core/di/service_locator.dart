@@ -46,8 +46,12 @@ Future<void> configureDependencies({
   sl.registerLazySingleton<GoRouter>(() => sl<AppRouter>().router);
 
   // Calories
-  sl.registerLazySingleton<FoodLocalDataSource>(() => FoodLocalDataSource(sl()));
-  sl.registerLazySingleton<FoodRemoteDataSource>(() => FoodRemoteDataSource(sl()));
+  sl.registerLazySingleton<FoodLocalDataSource>(
+    () => FoodLocalDataSource(sl(), sl()),
+  );
+  sl.registerLazySingleton<FoodRemoteDataSource>(
+    () => FoodRemoteDataSource(sl(), client: sl()),
+  );
   sl.registerLazySingleton<FoodRepository>(() => FoodRepositoryImpl(sl(), sl()));
 
   sl.registerLazySingleton<GetDailyFoodLog>(() => GetDailyFoodLog(sl()));

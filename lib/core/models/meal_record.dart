@@ -9,6 +9,8 @@ class MealRecord {
   final double protein;
   final double carbs;
   final double fat;
+  final double quantity;
+  final String? imageUrl;
   final DateTime dateTime;
 
   const MealRecord({
@@ -18,6 +20,8 @@ class MealRecord {
     required this.protein,
     required this.carbs,
     required this.fat,
+    this.quantity = 100.0,
+    this.imageUrl,
     required this.dateTime,
   });
 
@@ -28,6 +32,8 @@ class MealRecord {
     double? protein,
     double? carbs,
     double? fat,
+    double? quantity,
+    String? imageUrl,
     DateTime? dateTime,
   }) {
     return MealRecord(
@@ -37,6 +43,8 @@ class MealRecord {
       protein: protein ?? this.protein,
       carbs: carbs ?? this.carbs,
       fat: fat ?? this.fat,
+      quantity: quantity ?? this.quantity,
+      imageUrl: imageUrl ?? this.imageUrl,
       dateTime: dateTime ?? this.dateTime,
     );
   }
@@ -49,6 +57,8 @@ class MealRecord {
       'protein': protein,
       'carbs': carbs,
       'fat': fat,
+      'quantity': quantity,
+      if (imageUrl != null) 'imageUrl': imageUrl,
       'dateTime': dateTime.toIso8601String(),
     };
   }
@@ -61,6 +71,8 @@ class MealRecord {
       protein: (map['protein'] as num).toDouble(),
       carbs: (map['carbs'] as num).toDouble(),
       fat: (map['fat'] as num).toDouble(),
+      quantity: (map['quantity'] as num?)?.toDouble() ?? 100.0,
+      imageUrl: map['imageUrl'] as String?,
       dateTime: DateTime.parse(
         (map['dateTime'] ?? map['timestamp']) as String,
       ),
@@ -89,7 +101,8 @@ class MealRecord {
       protein: protein,
       carbs: carbs,
       fat: fat,
-      quantity: 100.0,
+      quantity: quantity,
+      imageUrl: imageUrl,
       timestamp: dateTime,
     );
   }
@@ -102,6 +115,8 @@ class MealRecord {
       protein: food.protein,
       carbs: food.carbs,
       fat: food.fat,
+      quantity: food.quantity,
+      imageUrl: food.imageUrl,
       dateTime: food.timestamp,
     );
   }

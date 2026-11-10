@@ -112,9 +112,11 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
 
           if (state.scannedMeal != null) {
             final detected = state.scannedMeal!;
-            final messenger = ScaffoldMessenger.of(context);
-            Navigator.of(context).pop();
-            messenger.showSnackBar(
+            setState(() {
+              _meal = detected;
+              _error = null;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
                   'Comida registrada: ${detected.name.capitalizeFirst()} (${detected.calories.toStringAsFixed(0)} kcal)',
@@ -148,111 +150,124 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                 // Error — use local _error, not state.error
                 if (_error != null) ...[
                   Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: Colors.red,
-                          size: 48,
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 24,
                         ),
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 32),
-                          child: Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.red),
-                          ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              color: Colors.red,
+                              size: 48,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                            const SizedBox(height: 16),
+                            OutlinedButton.icon(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.camera_alt_outlined),
+                              label: const Text('Retake'),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.camera_alt_outlined),
-                          label: const Text('Retake'),
-                        ),
-                        Row(),
-                      ],
+                      ),
                     ),
                   ),
                 ] else if (_meal != null) ...[
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.file(
-                        widget.imageFile,
-                        height: 150.h,
-                        width: 130.w,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _meal!.name.capitalizeFirst(),
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  30.kH,
-                  Text(
-                    _meal!.calories.toStringAsFixed(0),
-                    style: const TextStyle(
-                      fontSize: 64,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFFF8C00),
-                      height: 1,
-                    ),
-                  ),
-                  const Text(
-                    'calories',
-                    style: TextStyle(color: Colors.black54),
-                  ),
-
-                  const SizedBox(height: 30),
-                  _FoodMacros(meal: _meal!),
-                  const SizedBox(height: 40),
-                  Padding(
-                    padding: pagePadding * 2,
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
                         children: [
-                          TextSpan(
-                            text: '~  ',
-                            style: AppTypography.bodyLarge.copyWith(
-                              color: Colors.orange,
+                          Center(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.file(
+                                widget.imageFile,
+                                height: 150.h,
+                                width: 130.w,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
-                          TextSpan(
-                            text: 'Values are ',
-                            style: AppTypography.headlineSmall.copyWith(
-                              color: context.colors.onSurface,
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Text(
+                              _meal!.name.capitalizeFirst(),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                          TextSpan(
-                            text: 'AI-powered estimates  ',
-                            style: AppTypography.headlineSmall.copyWith(
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w600,
+                          30.kH,
+                          Text(
+                            _meal!.calories.toStringAsFixed(0),
+                            style: const TextStyle(
+                              fontSize: 64,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFFF8C00),
+                              height: 1,
                             ),
                           ),
-                          TextSpan(
-                            text: '\n& closely reflect real nutrition data.',
-                            style: AppTypography.bodySmall.copyWith(
-                              fontSize: 13,
-                            ),
+                          const Text(
+                            'calories',
+                            style: TextStyle(color: Colors.black54),
                           ),
-                          TextSpan(
-                            text: '  ~',
-                            style: AppTypography.bodyLarge.copyWith(
-                              color: Colors.orange,
+
+                          const SizedBox(height: 30),
+                          _FoodMacros(meal: _meal!),
+                          const SizedBox(height: 40),
+                          Padding(
+                            padding: pagePadding * 2,
+                            child: RichText(
+                              textAlign: TextAlign.center,
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: '~  ',
+                                    style: AppTypography.bodyLarge.copyWith(
+                                      color: Colors.orange,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: 'Values are ',
+                                    style: AppTypography.headlineSmall.copyWith(
+                                      color: context.colors.onSurface,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: 'AI-powered estimates  ',
+                                    style: AppTypography.headlineSmall.copyWith(
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text:
+                                        '\n& closely reflect real nutrition data.',
+                                    style: AppTypography.bodySmall.copyWith(
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: '  ~',
+                                    style: AppTypography.bodyLarge.copyWith(
+                                      color: Colors.orange,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
