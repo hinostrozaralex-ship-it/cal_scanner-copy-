@@ -55,16 +55,6 @@ class FoodService {
       'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent',
     );
 
-    final generationConfig = <String, dynamic>{
-      'responseMimeType': 'application/json',
-    };
-
-    if (model.contains('3.')) {
-      generationConfig['thinkingConfig'] = {
-        'thinkingLevel': 'LOW',
-      };
-    }
-
     return http
         .post(
           url,
@@ -77,8 +67,24 @@ class FoodService {
               {
                 'parts': [
                   {
-                    'text':
-                        'Analyze this image strictly in English. Determine whether the main subject is an edible food or drink item. Return ONLY a valid raw JSON object with keys: is_food (bool), name (string), serving_size (number), serving_unit (string: "ml", "g", "piece", "serving"), calories (number), protein (number), carbs (number), fat (number), non_food_message (string or null). Do not include markdown codeblocks or extra text.',
+                    'text': '''
+Analyze the provided image and return ONLY a valid raw JSON object (without markdown code blocks, backticks, or preamble) matching this schema:
+{
+  "is_food": boolean,
+  "name": string,
+  "serving_size": number,
+  "serving_unit": string,
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
+  "non_food_message": string or null
+}
+Guidelines:
+- All text fields must be in English.
+- If the image shows a non-food item (person, pet, electronics, furniture), set is_food to false, set calories and macros to 0, and provide a humorous, clever non_food_message related to what is visible.
+- If it is food, set is_food to true, non_food_message to null, and calculate realistic baseline nutritional values.
+''',
                   },
                   {
                     'inline_data': {
@@ -89,7 +95,13 @@ class FoodService {
                 ],
               },
             ],
-            'generationConfig': generationConfig,
+            'generationConfig': {
+              'responseMimeType': 'application/json',
+              'thinkingConfig': {
+                'thinkingLevel': 'LOW',
+              },
+              'maxOutputTokens': 800,
+            },
           }),
         )
         .timeout(const Duration(seconds: 60));

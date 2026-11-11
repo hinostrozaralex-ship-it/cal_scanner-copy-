@@ -27,8 +27,8 @@ class FoodRemoteDataSource {
     'gemini-3.5-flash-lite',
   ];
 
-  static const Duration perAttemptTimeout = Duration(seconds: 20);
-  static const Duration totalOperationTimeout = Duration(seconds: 45);
+  static const Duration perAttemptTimeout = Duration(seconds: 60);
+  static const Duration totalOperationTimeout = Duration(seconds: 120);
   static const Duration retryBaseDelay = Duration(milliseconds: 800);
 
   static const String missingApiKeyErrorMessage =
@@ -101,50 +101,13 @@ class FoodRemoteDataSource {
     debugPrint('[FoodRemoteDataSource] ${_sanitizeLog(message, apiKey)}');
   }
 
-  Map<String, dynamic> _buildGenerationConfig({required bool includeSchema}) {
-    final config = <String, dynamic>{
-      'responseMimeType': 'application/json',
-      'maxOutputTokens': 512,
-      'temperature': 0.2,
-    };
-
-    if (includeSchema) {
-      config['responseSchema'] = {
-        'type': 'OBJECT',
-        'properties': {
-          'is_food': {'type': 'BOOLEAN'},
-          'name': {'type': 'STRING'},
-          'serving_size': {'type': 'NUMBER'},
-          'serving_unit': {'type': 'STRING'},
-          'calories': {'type': 'NUMBER'},
-          'protein': {'type': 'NUMBER'},
-          'carbs': {'type': 'NUMBER'},
-          'fat': {'type': 'NUMBER'},
-          'non_food_message': {'type': 'STRING', 'nullable': true},
-        },
-        'required': [
-          'is_food',
-          'name',
-          'serving_size',
-          'serving_unit',
-          'calories',
-          'protein',
-          'carbs',
-          'fat',
-        ],
-      };
-    }
-
-    return config;
-  }
-
   Future<http.Response> _sendGenerateContentRequest({
     required String model,
     required String apiKey,
     required String base64Image,
     required String mimeType,
-    required Duration timeout,
-    bool includeSchema = true,
+    Duration timeout = const Duration(seconds: 60),
+    bool includeThinkingConfig = true,
   }) {
     final url = Uri.parse(
       'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent',
@@ -162,35 +125,45 @@ class FoodRemoteDataSource {
               {
                 'parts': [
                   {
-                    'text':
-                        'Analyze this image strictly in English. Determine whether the main subject is an edible food or drink item. '
-                        'Return ONLY a valid raw JSON object with the following keys: '
-                        'is_food (boolean: true if it is an edible food or drink; false if it is an animal, person, object, or electronic device), '
-                        'name (string: name of the food or detected object in English), '
-                        'serving_size (number: base portion size, e.g. 100 for liquids/grams, or 1 for individual pieces like an egg or apple), '
-                        'serving_unit (string: base unit, one of "ml", "g", "piece", "serving"), '
-                        'calories (number: calories corresponding to serving_size, or 0 if not food), '
-                        'protein (number: protein in grams for serving_size, or 0 if not food), '
-                        'carbs (number: carbs in grams for serving_size, or 0 if not food), '
-                        'fat (number: fat in grams for serving_size, or 0 if not food), '
-                        'non_food_message (string or null: if is_food is false, write a witty and humorous phrase in English contextualized with the detected object, e.g. for a cat: "Cats are friends, not food! Please do not consume your pets.", for a laptop: "Silicon and lithium might be high-tech, but they have zero nutritional value."; if is_food is true, must be null). '
-                        'Do not include markdown codeblocks or extra text.',
+                    'text': '''
+Analyze the provided image and return ONLY a valid raw JSON object (without markdown code blocks, backticks, or preamble) matching this schema:
+{
+  "is_food": boolean,
+  "name": string,
+  "serving_size": number,
+  "serving_unit": string,
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
+  "non_food_message": string or null
+}
+Guidelines:
+- All text fields must be in English.
+- If the image shows a non-food item (person, pet, electronics, furniture), set is_food to false, set calories and macros to 0, and provide a humorous, clever non_food_message related to what is visible.
+- If it is food, set is_food to true, non_food_message to null, and calculate realistic baseline nutritional values.
+''',
                   },
                   {
                     'inline_data': {
-                      'mime_type': mimeType,
+                      'mime_type': 'image/jpeg',
                       'data': base64Image,
                     },
                   },
                 ],
               },
             ],
-            'generationConfig': _buildGenerationConfig(
-              includeSchema: includeSchema,
-            ),
+            'generationConfig': {
+              'responseMimeType': 'application/json',
+              if (includeThinkingConfig)
+                'thinkingConfig': {
+                  'thinkingLevel': 'LOW',
+                },
+              'maxOutputTokens': 800,
+            },
           }),
         )
-        .timeout(timeout);
+        .timeout(const Duration(seconds: 60));
   }
 
   /// Consulta `GET /v1beta/models` usando la API Key del usuario únicamente
@@ -476,11 +449,9 @@ class FoodRemoteDataSource {
         : (rawIsFood?.toString().toLowerCase() != 'false');
 
     final rawName = foodData['name']?.toString().trim() ?? '';
-    final parsedServingSize =
-        (foodData['serving_size'] as num?)?.toDouble() ??
-        _parseNonNegativeDouble(
-          foodData['serving_size'] ?? foodData['servingSize'],
-        );
+    final parsedServingSize = _parseNonNegativeDouble(
+      foodData['serving_size'] ?? foodData['servingSize'],
+    );
     final servingSize = (parsedServingSize != null && parsedServingSize > 0)
         ? parsedServingSize
         : (isFood ? 100.0 : 1.0);
@@ -492,18 +463,10 @@ class FoodRemoteDataSource {
         '';
     final servingUnit = rawServingUnit.isNotEmpty ? rawServingUnit : 'g';
 
-    final calories =
-        (foodData['calories'] as num?)?.toDouble() ??
-        _parseNonNegativeDouble(foodData['calories']);
-    final protein =
-        (foodData['protein'] as num?)?.toDouble() ??
-        _parseNonNegativeDouble(foodData['protein']);
-    final carbs =
-        (foodData['carbs'] as num?)?.toDouble() ??
-        _parseNonNegativeDouble(foodData['carbs']);
-    final fat =
-        (foodData['fat'] as num?)?.toDouble() ??
-        _parseNonNegativeDouble(foodData['fat']);
+    final calories = _parseNonNegativeDouble(foodData['calories']);
+    final protein = _parseNonNegativeDouble(foodData['protein']);
+    final carbs = _parseNonNegativeDouble(foodData['carbs']);
+    final fat = _parseNonNegativeDouble(foodData['fat']);
 
     final rawNonFoodMsg =
         (foodData['non_food_message'] ?? foodData['nonFoodMessage'])
@@ -636,12 +599,6 @@ class FoodRemoteDataSource {
         } on TimeoutException catch (e) {
           hadTimeout = true;
           _logSafe('Timeout on model $model: $e', apiKey);
-          // Si aún queda tiempo en el presupuesto total y hay otro modelo rápido, probar el siguiente
-          if (index < modelsQueue.length &&
-              (totalOperationTimeout - stopwatch.elapsed) >
-                  const Duration(seconds: 5)) {
-            continue;
-          }
           return left(NetworkFailure(timeoutErrorMessage, cause: e));
         } on SocketException catch (e) {
           _logSafe('SocketException on model $model: $e', apiKey);
@@ -687,7 +644,7 @@ class FoodRemoteDataSource {
                 timeout: retryRemaining < perAttemptTimeout
                     ? retryRemaining
                     : perAttemptTimeout,
-                includeSchema: false,
+                includeThinkingConfig: false,
               );
               lastStatusCode = plainResponse.statusCode;
               lastResponseBody = plainResponse.body;
@@ -707,7 +664,7 @@ class FoodRemoteDataSource {
         }
 
         // 3. Modelo no encontrado (404) o retirado para esta cuenta -> pasar al siguiente candidato
-        if (_isModelNotAvailableError(lastStatusCode!, lastResponseBody!)) {
+        if (_isModelNotAvailableError(lastStatusCode, lastResponseBody)) {
           if (index >= modelsQueue.length && !discoveryAttempted) {
             discoveryAttempted = true;
             final discRemaining = totalOperationTimeout - stopwatch.elapsed;
