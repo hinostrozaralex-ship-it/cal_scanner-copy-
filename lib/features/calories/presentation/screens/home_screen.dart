@@ -29,6 +29,130 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _profileRefreshTick = 0;
 
+  Future<void> _pickAndScanImage(
+    BuildContext context,
+    ImageSource source,
+  ) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: source,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 60,
+    );
+    if (picked == null) return;
+    final file = File(picked.path);
+    if (!context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlocProvider.value(
+          value: context.read<FoodLogCubit>(),
+          child: ScanResultScreen(imageFile: file),
+        ),
+      ),
+    );
+  }
+
+  void _showImageSourceSelector(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.kWhite,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40.w,
+                height: 4.h,
+                decoration: BoxDecoration(
+                  color: AppColors.kBlack.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4.r),
+                ),
+              ),
+              SizedBox(height: 14.h),
+              Text(
+                'Scan Food',
+                style: AppTypography.headlineSmall.copyWith(
+                  fontSize: 17.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: 12.h),
+              ListTile(
+                leading: Container(
+                  padding: EdgeInsets.all(10.w),
+                  decoration: BoxDecoration(
+                    color: AppColors.kOrange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  child: Icon(
+                    CupertinoIcons.camera_fill,
+                    color: AppColors.kOrange,
+                    size: 22.sp,
+                  ),
+                ),
+                title: Text(
+                  'Take a Photo',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  'Use camera to scan your meal right now',
+                  style: AppTypography.bodySmall.copyWith(
+                    fontSize: 12.sp,
+                    color: AppColors.kBlack.withValues(alpha: 0.6),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickAndScanImage(context, ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: EdgeInsets.all(10.w),
+                  decoration: BoxDecoration(
+                    color: AppColors.kBlack.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  child: Icon(
+                    CupertinoIcons.photo_fill,
+                    color: AppColors.kBlack,
+                    size: 22.sp,
+                  ),
+                ),
+                title: Text(
+                  'Choose from Gallery',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  'Pick an existing photo from your device',
+                  style: AppTypography.bodySmall.copyWith(
+                    fontSize: 12.sp,
+                    color: AppColors.kBlack.withValues(alpha: 0.6),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickAndScanImage(context, ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -122,27 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.kOrange,
-        onPressed: () async {
-          final picker = ImagePicker();
-          final picked = await picker.pickImage(
-            source: ImageSource.camera,
-            maxWidth: 800,
-            maxHeight: 800,
-            imageQuality: 70,
-          );
-          if (picked == null) return;
-          final file = File(picked.path);
-          if (!context.mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => BlocProvider.value(
-                value: context.read<FoodLogCubit>(),
-                child: ScanResultScreen(imageFile: file),
-              ),
-            ),
-          );
-        },
+        onPressed: () => _showImageSourceSelector(context),
         child: Icon(
           CupertinoIcons.camera_viewfinder,
           size: 30.sp,

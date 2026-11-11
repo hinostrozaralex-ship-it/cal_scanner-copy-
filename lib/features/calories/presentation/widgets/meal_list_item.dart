@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cal_scanner/app_widgets/buttons/app_button.dart';
 import 'package:cal_scanner/core/extensions/capital_first_extension.dart';
 import 'package:cal_scanner/core/extensions/context_extension.dart';
@@ -59,6 +61,8 @@ class MealListItem extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            _MealThumbnail(imageUrl: meal.imageUrl, size: 46.w),
+            SizedBox(width: 12.w),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,6 +318,8 @@ class _EditMealBottomSheetState extends State<EditMealBottomSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                _MealThumbnail(imageUrl: widget.meal.imageUrl, size: 42.w),
+                SizedBox(width: 12.w),
                 Expanded(
                   child: Text(
                     'Edit Meal: ${widget.meal.name.capitalizeFirst()}',
@@ -524,6 +530,52 @@ class _MacroInputField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MealThumbnail extends StatelessWidget {
+  final String? imageUrl;
+  final double size;
+
+  const _MealThumbnail({
+    required this.imageUrl,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final path = imageUrl?.trim();
+    final hasLocalFile =
+        path != null &&
+        path.isNotEmpty &&
+        !path.startsWith('http') &&
+        File(path).existsSync();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10.r),
+      child: hasLocalFile
+          ? Image.file(
+              File(path),
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _placeholder(),
+            )
+          : _placeholder(),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      width: size,
+      height: size,
+      color: AppColors.kOrange.withValues(alpha: 0.12),
+      child: Icon(
+        Icons.restaurant_rounded,
+        color: AppColors.kOrange,
+        size: size * 0.5,
+      ),
     );
   }
 }

@@ -422,10 +422,68 @@ void main() {
       expect(storedMeals.length, 1);
       expect(storedMeals.first.calories, closeTo(135.0, 0.01));
 
+      // Step 4: User deletes the meal — verify it does not resurrect from legacy storage
+      await cubit.deleteMeal(editedMeal);
+      expect(cubit.state.meals, isEmpty);
+      expect(cubit.state.totalCalories, 0.0);
+      final afterDelete = await storage.getMealsByDate(DateTime.now());
+      expect(afterDelete, isEmpty);
+
       await cubit.close();
     });
 
-    test('9. Scan error clears isScanning and sets English error message', () async {
+    test('9. Thought parts in Gemini 3 response are skipped and real JSON part is extracted', () async {
+      final storage = await createStorageWithKey('user_test_key_123');
+
+      final client = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'candidates': [
+              {
+                'content': {
+                  'parts': [
+                    {
+                      'thought': true,
+                      'text': 'Let me analyze the plate and estimate macros...',
+                    },
+                    {
+                      'text': jsonEncode({
+                        'is_food': true,
+                        'name': 'Avocado Toast',
+                        'serving_size': 1,
+                        'serving_unit': 'piece',
+                        'calories': 290,
+                        'protein': 8,
+                        'carbs': 28,
+                        'fat': 16,
+                        'non_food_message': null,
+                      }),
+                    },
+                  ],
+                },
+                'finishReason': 'STOP',
+              },
+            ],
+          }),
+          200,
+        );
+      });
+
+      final dataSource = FoodRemoteDataSource(
+        storage,
+        client: client,
+        delay: (_) async {},
+      );
+
+      final result = await dataSource.detectFoodAndCalories(testImageFile);
+      expect(result.isRight(), isTrue);
+      final food = result.getOrElse((_) => throw StateError('Expected Right'));
+      expect(food.name, 'Avocado Toast');
+      expect(food.calories, 290.0);
+      expect(food.servingUnit, 'piece');
+    });
+
+    test('10. Scan error clears isScanning and sets English error message', () async {
       final prefs = await SharedPreferences.getInstance();
       final storage = LocalStorageService(prefs);
 

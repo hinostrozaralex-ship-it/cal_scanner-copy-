@@ -11,24 +11,25 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/storage/local_storage_service.dart';
 import '../../domain/entities/food.dart';
 
-const String primaryModel = 'gemini-3.8-flash';
-const String fallbackModel = 'gemini-2.5-flash';
+const String primaryModel = 'gemini-3.5-flash-lite';
+const String fallbackModel = 'gemini-3.8-flash';
 const String highDemandErrorMessage =
     "AI servers are experiencing high demand right now. Please tap 'Try Again' and retry in a few seconds.";
 
 class FoodRemoteDataSource {
-  static const String primaryModel = 'gemini-3.8-flash';
-  static const String fallbackModel = 'gemini-2.5-flash';
+  static const String primaryModel = 'gemini-3.5-flash-lite';
+  static const String fallbackModel = 'gemini-3.8-flash';
   static const List<String> candidateModels = <String>[
     primaryModel,
     fallbackModel,
+    'gemini-3.6-flash',
+    'gemini-3.1-flash-lite',
     'gemini-flash-latest',
-    'gemini-2.0-flash',
-    'gemini-3.5-flash-lite',
+    'gemini-2.5-flash',
   ];
 
-  static const Duration perAttemptTimeout = Duration(seconds: 60);
-  static const Duration totalOperationTimeout = Duration(seconds: 120);
+  static const Duration perAttemptTimeout = Duration(seconds: 20);
+  static const Duration totalOperationTimeout = Duration(seconds: 45);
   static const Duration retryBaseDelay = Duration(milliseconds: 800);
 
   static const String missingApiKeyErrorMessage =
@@ -101,6 +102,17 @@ class FoodRemoteDataSource {
     debugPrint('[FoodRemoteDataSource] ${_sanitizeLog(message, apiKey)}');
   }
 
+  Map<String, dynamic>? _buildThinkingConfigForModel(String model) {
+    final lower = model.toLowerCase();
+    if (lower.contains('gemini-3')) {
+      return const {'thinkingLevel': 'LOW'};
+    }
+    if (lower.contains('gemini-2.5')) {
+      return const {'thinkingBudget': 0};
+    }
+    return null;
+  }
+
   Future<http.Response> _sendGenerateContentRequest({
     required String model,
     required String apiKey,
@@ -112,6 +124,10 @@ class FoodRemoteDataSource {
     final url = Uri.parse(
       'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent',
     );
+
+    final thinkingConfig = includeThinkingConfig
+        ? _buildThinkingConfigForModel(model)
+        : null;
 
     return _client
         .post(
@@ -146,7 +162,7 @@ Guidelines:
                   },
                   {
                     'inline_data': {
-                      'mime_type': 'image/jpeg',
+                      'mime_type': mimeType,
                       'data': base64Image,
                     },
                   },
@@ -155,15 +171,12 @@ Guidelines:
             ],
             'generationConfig': {
               'responseMimeType': 'application/json',
-              if (includeThinkingConfig)
-                'thinkingConfig': {
-                  'thinkingLevel': 'LOW',
-                },
+              'thinkingConfig': ?thinkingConfig,
               'maxOutputTokens': 800,
             },
           }),
         )
-        .timeout(const Duration(seconds: 60));
+        .timeout(timeout);
   }
 
   /// Consulta `GET /v1beta/models` usando la API Key del usuario únicamente
@@ -314,6 +327,11 @@ Guidelines:
     return message.contains('responseschema') ||
         message.contains('response_schema') ||
         message.contains('thinkingconfig') ||
+        message.contains('thinking_config') ||
+        message.contains('thinkinglevel') ||
+        message.contains('thinking_level') ||
+        message.contains('thinkingbudget') ||
+        message.contains('thinking_budget') ||
         message.contains('unknown name');
   }
 
@@ -398,14 +416,24 @@ Guidelines:
     final parts = firstCandidate['content']?['parts'];
     String? outputText;
     if (parts is List) {
+      final nonThoughtTexts = <String>[];
       for (final part in parts) {
         if (part is Map && part['text'] is String) {
+          if (part['thought'] == true) {
+            continue;
+          }
           final text = (part['text'] as String).trim();
           if (text.isNotEmpty) {
-            outputText = text;
-            break;
+            nonThoughtTexts.add(text);
           }
         }
+      }
+
+      if (nonThoughtTexts.isNotEmpty) {
+        outputText = nonThoughtTexts.firstWhere(
+          (t) => t.contains('{') && t.contains('}'),
+          orElse: () => nonThoughtTexts.last,
+        );
       }
     }
 
@@ -599,6 +627,12 @@ Guidelines:
         } on TimeoutException catch (e) {
           hadTimeout = true;
           _logSafe('Timeout on model $model: $e', apiKey);
+          if (triedModels.length < 2 &&
+              index < modelsQueue.length &&
+              (totalOperationTimeout - stopwatch.elapsed) >
+                  const Duration(seconds: 5)) {
+            continue;
+          }
           return left(NetworkFailure(timeoutErrorMessage, cause: e));
         } on SocketException catch (e) {
           _logSafe('SocketException on model $model: $e', apiKey);

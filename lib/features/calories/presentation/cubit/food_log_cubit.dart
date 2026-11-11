@@ -168,6 +168,9 @@ class FoodLogCubit extends Cubit<FoodLogState> {
   }
 
   Future<void> deleteMeal(Food meal) async {
+    if (sl.isRegistered<LocalStorageService>()) {
+      await sl<LocalStorageService>().deleteMeal(meal.id);
+    }
     final result = await _deleteFood(meal);
     await result.fold(
       (l) async => emit(state.copyWith(error: l.message)),

@@ -29,7 +29,10 @@ class FoodLocalDataSource {
     final stored = _prefs.getString(key);
     if (stored == null) return [];
     final decoded = jsonDecode(stored);
-    if (decoded is! List) return [];
+    if (decoded is! List) {
+      await _prefs.remove(key);
+      return [];
+    }
     final legacyItems = decoded
         .whereType<Map>()
         .map((m) => FoodModel.fromJson(Map<String, dynamic>.from(m)))
@@ -38,15 +41,20 @@ class FoodLocalDataSource {
     for (final item in legacyItems) {
       await _localStorage.saveMeal(MealRecord.fromFood(item.toDomain()));
     }
+    await _prefs.remove(key);
     return legacyItems;
   }
 
   Future<void> setDailyFoodLog(DateTime date, List<FoodModel> items) async {
     final key = _keyForDate(date);
-    await _prefs.setString(
-      key,
-      jsonEncode(items.map((e) => e.toJson()).toList()),
-    );
+    if (items.isEmpty) {
+      await _prefs.remove(key);
+    } else {
+      await _prefs.setString(
+        key,
+        jsonEncode(items.map((e) => e.toJson()).toList()),
+      );
+    }
 
     final existingForDate = await _localStorage.getMealsByDate(date);
     final newIds = items.map((e) => e.id).toSet();

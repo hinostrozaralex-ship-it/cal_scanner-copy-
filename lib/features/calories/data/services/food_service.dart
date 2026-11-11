@@ -8,14 +8,14 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/storage/local_storage_service.dart';
 import '../models/food_item.dart';
 
-const String primaryModel = 'gemini-3.8-flash';
-const String fallbackModel = 'gemini-2.5-flash';
+const String primaryModel = 'gemini-3.5-flash-lite';
+const String fallbackModel = 'gemini-3.8-flash';
 const String highDemandErrorMessage =
     "AI servers are experiencing high demand right now. Please tap 'Try Again' and retry in a few seconds.";
 
 class FoodService {
-  static const String primaryModel = 'gemini-3.8-flash';
-  static const String fallbackModel = 'gemini-2.5-flash';
+  static const String primaryModel = 'gemini-3.5-flash-lite';
+  static const String fallbackModel = 'gemini-3.8-flash';
   static const String highDemandErrorMessage =
       "AI servers are experiencing high demand right now. Please tap 'Try Again' and retry in a few seconds.";
 
