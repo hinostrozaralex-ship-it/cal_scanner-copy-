@@ -1,7 +1,6 @@
 import 'package:cal_scanner/core/extensions/context_extension.dart';
 import 'package:cal_scanner/core/extensions/num_extension.dart';
 import 'package:cal_scanner/core/extensions/widget_extension.dart';
-import 'package:cal_scanner/features/calories/presentation/screens/meal_detail_screen.dart';
 import 'package:cal_scanner/gen/assets.gen.dart';
 import 'package:cal_scanner/theme/app_colors.dart';
 import 'package:cal_scanner/theme/app_typography.dart';
@@ -45,7 +44,7 @@ class MealList extends StatelessWidget {
                 Padding(
                   padding: pagePadding,
                   child: Text(
-                    'No hay comidas registradas en este día',
+                    'No meals logged for this day',
                     textAlign: TextAlign.center,
                     style: AppTypography.bodyMedium.copyWith(
                       color: context.colors.onSurfaceVariant,
@@ -84,7 +83,7 @@ class MealList extends StatelessWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Registro eliminado',
+                        'Meal deleted',
                         style: AppTypography.bodyMedium.copyWith(
                           color: AppColors.kWhite,
                         ),
@@ -94,22 +93,13 @@ class MealList extends StatelessWidget {
                     ),
                   );
                 },
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MealDetailScreen(meal: meal),
-                      ),
-                    );
+                child: MealListItem(
+                  meal: meal,
+                  timeFormatted: _formatHourMinute(meal.timestamp),
+                  onTap: () => showEditMealBottomSheet(context, meal),
+                  onDelete: () {
+                    context.read<FoodLogCubit>().deleteMeal(meal);
                   },
-                  child: MealListItem(
-                    meal: meal,
-                    timeFormatted: _formatHourMinute(meal.timestamp),
-                    onDelete: () {
-                      context.read<FoodLogCubit>().deleteMeal(meal);
-                    },
-                  ),
                 ),
               );
             },

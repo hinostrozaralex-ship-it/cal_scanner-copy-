@@ -94,24 +94,24 @@ class _WeekDatePickerState extends State<WeekDatePicker> {
   bool _isToday(DateTime date) => _isSameDay(date, DateTime.now());
 
   String _dayLabel(DateTime date) {
-    const labels = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+    const labels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
     return labels[date.weekday - 1];
   }
 
   String _monthYearLabel(DateTime date) {
     const months = [
-      'ENERO',
-      'FEBRERO',
-      'MARZO',
-      'ABRIL',
-      'MAYO',
-      'JUNIO',
-      'JULIO',
-      'AGOSTO',
-      'SEPTIEMBRE',
-      'OCTUBRE',
-      'NOVIEMBRE',
-      'DICIEMBRE',
+      'JANUARY',
+      'FEBRUARY',
+      'MARCH',
+      'APRIL',
+      'MAY',
+      'JUNE',
+      'JULY',
+      'AUGUST',
+      'SEPTEMBER',
+      'OCTOBER',
+      'NOVEMBER',
+      'DECEMBER',
     ];
     return '${months[date.month - 1]} ${date.year}';
   }
@@ -159,7 +159,7 @@ class _WeekDatePickerState extends State<WeekDatePicker> {
                         ),
                         SizedBox(width: 4.w),
                         Text(
-                          'Hoy',
+                          'Today',
                           style: AppTypography.labelMedium.copyWith(
                             color:
                                 isSelectedToday ? dateColor : AppColors.kWhite,

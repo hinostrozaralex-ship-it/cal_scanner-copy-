@@ -11,13 +11,13 @@ import '../models/food_item.dart';
 const String primaryModel = 'gemini-3.8-flash';
 const String fallbackModel = 'gemini-2.5-flash';
 const String highDemandErrorMessage =
-    "Los servidores de IA están experimentando alta demanda en este momento. Por favor, pulsa 'Retake' y prueba de nuevo en unos segundos.";
+    "AI servers are experiencing high demand right now. Please tap 'Try Again' and retry in a few seconds.";
 
 class FoodService {
   static const String primaryModel = 'gemini-3.8-flash';
   static const String fallbackModel = 'gemini-2.5-flash';
   static const String highDemandErrorMessage =
-      "Los servidores de IA están experimentando alta demanda en este momento. Por favor, pulsa 'Retake' y prueba de nuevo en unos segundos.";
+      "AI servers are experiencing high demand right now. Please tap 'Try Again' and retry in a few seconds.";
 
   Future<String?> _resolveApiKey() async {
     if (sl.isRegistered<LocalStorageService>()) {
@@ -78,7 +78,7 @@ class FoodService {
                 'parts': [
                   {
                     'text':
-                        'Analyze this food item. Return ONLY a valid raw JSON object with keys: name (string), calories (number), protein (number), carbs (number), fat (number). Do not include markdown codeblocks or extra text.',
+                        'Analyze this image strictly in English. Determine whether the main subject is an edible food or drink item. Return ONLY a valid raw JSON object with keys: is_food (bool), name (string), serving_size (number), serving_unit (string: "ml", "g", "piece", "serving"), calories (number), protein (number), carbs (number), fat (number), non_food_message (string or null). Do not include markdown codeblocks or extra text.',
                   },
                   {
                     'inline_data': {
@@ -104,7 +104,7 @@ class FoodService {
       final apiKey = await _resolveApiKey();
       if (apiKey == null || apiKey.isEmpty) {
         return const Left(
-          'Por favor, ingresa tu Gemini API Key en los Ajustes',
+          'Please enter your Gemini API Key in Settings.',
         );
       }
 

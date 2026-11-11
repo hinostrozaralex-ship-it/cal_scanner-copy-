@@ -117,7 +117,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Ajustes guardados correctamente',
+          'Settings saved successfully',
           style: AppTypography.bodyMedium.copyWith(color: AppColors.kWhite),
         ),
         backgroundColor: AppColors.kBlack,
@@ -144,7 +144,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         leading: const AppBackButton(),
         centerTitle: true,
         title: Text(
-          'Ajustes y Perfil',
+          'Settings & Profile',
           style: AppTypography.displaySmall.copyWith(fontSize: 19.sp),
         ),
       ),
@@ -157,7 +157,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Sistema de Unidades',
+                      'Unit System',
                       style: AppTypography.titleMedium.copyWith(
                         fontWeight: FontWeight.w600,
                         color: AppColors.kBlack,
@@ -170,11 +170,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     SizedBox(height: 20.h),
 
-                    _SettingsLabel('Nombre / Alias'),
+                    _SettingsLabel('Name / Alias'),
                     SizedBox(height: 6.h),
                     _SettingsTextField(
                       controller: _nameController,
-                      hintText: 'Tu nombre o alias',
+                      hintText: 'Your name or alias',
                       keyboardType: TextInputType.name,
                       prefixIcon: Icons.person_outline,
                     ),
@@ -186,12 +186,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _SettingsLabel('Edad'),
+                              _SettingsLabel('Age'),
                               SizedBox(height: 6.h),
                               _SettingsTextField(
                                 controller: _ageController,
                                 hintText: '25',
-                                suffixText: 'años',
+                                suffixText: 'yrs',
                                 keyboardType: TextInputType.number,
                               ),
                             ],
@@ -202,7 +202,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _SettingsLabel('Peso ($weightUnit)'),
+                              _SettingsLabel('Weight ($weightUnit)'),
                               SizedBox(height: 6.h),
                               _SettingsTextField(
                                 controller: _weightController,
@@ -221,7 +221,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _SettingsLabel('Talla ($heightUnit)'),
+                              _SettingsLabel('Height ($heightUnit)'),
                               SizedBox(height: 6.h),
                               _SettingsTextField(
                                 controller: _heightController,
@@ -252,7 +252,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     SizedBox(height: 4.h),
                     Text(
-                      'Obtén tu clave gratuita en Google AI Studio',
+                      'Get your free key from Google AI Studio',
                       style: AppTypography.bodySmall.copyWith(
                         fontSize: 12.sp,
                         color: AppColors.kBlack.withValues(alpha: 0.6),
@@ -261,7 +261,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     SizedBox(height: 8.h),
                     _SettingsTextField(
                       controller: _apiKeyController,
-                      hintText: 'Pega tu Gemini API Key aquí',
+                      hintText: 'Paste your Gemini API Key here',
                       obscureText: _obscureApiKey,
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -281,7 +281,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     SizedBox(height: 32.h),
 
                     AppButton(
-                      text: 'Guardar Cambios',
+                      text: 'Save Changes',
                       onTap: _saveSettings,
                     ),
                   ],
@@ -341,7 +341,7 @@ class _SettingsUnitSelector extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  'Métrico (kg / cm)',
+                  'Metric (kg / cm)',
                   style: AppTypography.titleSmall.copyWith(
                     color: isMetric ? AppColors.kWhite : AppColors.kBlack,
                     fontWeight: FontWeight.w600,

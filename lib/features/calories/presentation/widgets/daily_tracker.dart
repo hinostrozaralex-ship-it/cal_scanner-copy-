@@ -108,7 +108,7 @@ class _DailyTrackerState extends State<DailyTracker> {
               ),
               SizedBox(height: 5.h),
               Text(
-                'de ${targetCalories.toInt()} kcal',
+                'of ${targetCalories.toInt()} kcal',
                 style: AppTypography.titleMedium.copyWith(
                   color: AppColors.kgrey,
                 ),
@@ -122,19 +122,19 @@ class _DailyTrackerState extends State<DailyTracker> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             MacroIndicator(
-              label: 'Proteínas',
+              label: 'Protein',
               value: widget.protein,
               goal: (userData?.proteinGoal ?? 125).toDouble(),
               color: Colors.green,
             ),
             MacroIndicator(
-              label: 'Carbohidratos',
+              label: 'Carbs',
               value: widget.carbs,
               goal: (userData?.carbsGoal ?? 250).toDouble(),
               color: Colors.amber,
             ),
             MacroIndicator(
-              label: 'Grasas',
+              label: 'Fat',
               value: widget.fat,
               goal: (userData?.fatGoal ?? 55).toDouble(),
               color: Colors.orange,

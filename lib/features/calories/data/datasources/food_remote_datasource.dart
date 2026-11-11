@@ -11,20 +11,20 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/storage/local_storage_service.dart';
 import '../../domain/entities/food.dart';
 
-const String primaryModel = 'gemini-flash-latest';
-const String fallbackModel = 'gemini-2.0-flash';
+const String primaryModel = 'gemini-3.8-flash';
+const String fallbackModel = 'gemini-2.5-flash';
 const String highDemandErrorMessage =
-    "Los servidores de IA están experimentando alta demanda en este momento. Por favor, pulsa 'Retake' y prueba de nuevo en unos segundos.";
+    "AI servers are experiencing high demand right now. Please tap 'Try Again' and retry in a few seconds.";
 
 class FoodRemoteDataSource {
-  static const String primaryModel = 'gemini-flash-latest';
-  static const String fallbackModel = 'gemini-2.0-flash';
+  static const String primaryModel = 'gemini-3.8-flash';
+  static const String fallbackModel = 'gemini-2.5-flash';
   static const List<String> candidateModels = <String>[
     primaryModel,
     fallbackModel,
+    'gemini-flash-latest',
+    'gemini-2.0-flash',
     'gemini-3.5-flash-lite',
-    'gemini-3.8-flash',
-    'gemini-2.5-flash',
   ];
 
   static const Duration perAttemptTimeout = Duration(seconds: 20);
@@ -32,23 +32,23 @@ class FoodRemoteDataSource {
   static const Duration retryBaseDelay = Duration(milliseconds: 800);
 
   static const String missingApiKeyErrorMessage =
-      'Por favor, ingresa tu Gemini API Key en los Ajustes';
+      'Please enter your Gemini API Key in Settings.';
   static const String invalidApiKeyErrorMessage =
-      'Tu Gemini API Key no es válida o no tiene permisos. Verifica tu clave en los Ajustes.';
+      'Your Gemini API Key is invalid or lacks permissions. Please check your key in Settings.';
   static const String modelUnavailableErrorMessage =
-      'El modelo de IA solicitado no está disponible para tu cuenta o clave API.';
+      'The requested AI model is not available for your account or API key.';
   static const String quotaExceededErrorMessage =
-      'Se alcanzó el límite de solicitudes o cuota de tu Gemini API Key. Espera unos segundos o revisa tu cuenta en Google AI Studio.';
+      'Your Gemini API Key quota or rate limit has been reached. Please wait a moment or check your Google AI Studio account.';
   static const String highDemandErrorMessage =
-      "Los servidores de IA están experimentando alta demanda en este momento. Por favor, pulsa 'Retake' y prueba de nuevo en unos segundos.";
+      "AI servers are experiencing high demand right now. Please tap 'Try Again' and retry in a few seconds.";
   static const String noConnectionErrorMessage =
-      'No hay conexión a internet. Verifica tu red e inténtalo de nuevo.';
+      'No internet connection. Please check your network and try again.';
   static const String timeoutErrorMessage =
-      'El servidor de IA tardó demasiado en responder. Comprueba tu conexión e inténtalo de nuevo.';
+      'The AI server took too long to respond. Please check your connection and try again.';
   static const String invalidResponseErrorMessage =
-      'No se pudo interpretar la información nutricional de la imagen. Intenta tomar una foto más clara.';
+      'Could not interpret the nutritional information from this image. Please try taking a clearer photo.';
   static const String blockedResponseErrorMessage =
-      'La imagen no pudo ser procesada por las políticas del modelo. Intenta con otra fotografía del alimento.';
+      'The image could not be processed due to safety policies. Please try another photo.';
 
   final LocalStorageService _localStorage;
   final http.Client _client;
@@ -112,13 +112,26 @@ class FoodRemoteDataSource {
       config['responseSchema'] = {
         'type': 'OBJECT',
         'properties': {
+          'is_food': {'type': 'BOOLEAN'},
           'name': {'type': 'STRING'},
+          'serving_size': {'type': 'NUMBER'},
+          'serving_unit': {'type': 'STRING'},
           'calories': {'type': 'NUMBER'},
           'protein': {'type': 'NUMBER'},
           'carbs': {'type': 'NUMBER'},
           'fat': {'type': 'NUMBER'},
+          'non_food_message': {'type': 'STRING', 'nullable': true},
         },
-        'required': ['name', 'calories', 'protein', 'carbs', 'fat'],
+        'required': [
+          'is_food',
+          'name',
+          'serving_size',
+          'serving_unit',
+          'calories',
+          'protein',
+          'carbs',
+          'fat',
+        ],
       };
     }
 
@@ -150,7 +163,18 @@ class FoodRemoteDataSource {
                 'parts': [
                   {
                     'text':
-                        'Analyze this food item. Return ONLY a valid raw JSON object with keys: name (string), calories (number), protein (number), carbs (number), fat (number). Do not include markdown codeblocks or extra text.',
+                        'Analyze this image strictly in English. Determine whether the main subject is an edible food or drink item. '
+                        'Return ONLY a valid raw JSON object with the following keys: '
+                        'is_food (boolean: true if it is an edible food or drink; false if it is an animal, person, object, or electronic device), '
+                        'name (string: name of the food or detected object in English), '
+                        'serving_size (number: base portion size, e.g. 100 for liquids/grams, or 1 for individual pieces like an egg or apple), '
+                        'serving_unit (string: base unit, one of "ml", "g", "piece", "serving"), '
+                        'calories (number: calories corresponding to serving_size, or 0 if not food), '
+                        'protein (number: protein in grams for serving_size, or 0 if not food), '
+                        'carbs (number: carbs in grams for serving_size, or 0 if not food), '
+                        'fat (number: fat in grams for serving_size, or 0 if not food), '
+                        'non_food_message (string or null: if is_food is false, write a witty and humorous phrase in English contextualized with the detected object, e.g. for a cat: "Cats are friends, not food! Please do not consume your pets.", for a laptop: "Silicon and lithium might be high-tech, but they have zero nutritional value."; if is_food is true, must be null). '
+                        'Do not include markdown codeblocks or extra text.',
                   },
                   {
                     'inline_data': {
@@ -446,17 +470,84 @@ class FoodRemoteDataSource {
       );
     }
 
+    final rawIsFood = foodData['is_food'] ?? foodData['isFood'];
+    final bool isFood = rawIsFood is bool
+        ? rawIsFood
+        : (rawIsFood?.toString().toLowerCase() != 'false');
+
     final rawName = foodData['name']?.toString().trim() ?? '';
-    final calories = _parseNonNegativeDouble(foodData['calories']);
-    final protein = _parseNonNegativeDouble(foodData['protein']);
-    final carbs = _parseNonNegativeDouble(foodData['carbs']);
-    final fat = _parseNonNegativeDouble(foodData['fat']);
+    final parsedServingSize =
+        (foodData['serving_size'] as num?)?.toDouble() ??
+        _parseNonNegativeDouble(
+          foodData['serving_size'] ?? foodData['servingSize'],
+        );
+    final servingSize = (parsedServingSize != null && parsedServingSize > 0)
+        ? parsedServingSize
+        : (isFood ? 100.0 : 1.0);
+
+    final rawServingUnit =
+        (foodData['serving_unit'] ?? foodData['servingUnit'])
+            ?.toString()
+            .trim() ??
+        '';
+    final servingUnit = rawServingUnit.isNotEmpty ? rawServingUnit : 'g';
+
+    final calories =
+        (foodData['calories'] as num?)?.toDouble() ??
+        _parseNonNegativeDouble(foodData['calories']);
+    final protein =
+        (foodData['protein'] as num?)?.toDouble() ??
+        _parseNonNegativeDouble(foodData['protein']);
+    final carbs =
+        (foodData['carbs'] as num?)?.toDouble() ??
+        _parseNonNegativeDouble(foodData['carbs']);
+    final fat =
+        (foodData['fat'] as num?)?.toDouble() ??
+        _parseNonNegativeDouble(foodData['fat']);
+
+    final rawNonFoodMsg =
+        (foodData['non_food_message'] ?? foodData['nonFoodMessage'])
+            ?.toString()
+            .trim();
+
+    if (!isFood) {
+      final safeName = rawName.isNotEmpty ? rawName : 'Non-Food Object';
+      final wittyMsg = (rawNonFoodMsg != null && rawNonFoodMsg.isNotEmpty)
+          ? rawNonFoodMsg
+          : '$safeName is great to look at, but it has zero nutritional value! Please scan an edible food or drink.';
+
+      return right(
+        Food(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          name: safeName,
+          calories: 0.0,
+          protein: 0.0,
+          carbs: 0.0,
+          fat: 0.0,
+          quantity: servingSize,
+          imageUrl: imagePath,
+          timestamp: DateTime.now(),
+          isFood: false,
+          servingSize: servingSize,
+          servingUnit: servingUnit,
+          baseCalories: 0.0,
+          baseProtein: 0.0,
+          baseCarbs: 0.0,
+          baseFat: 0.0,
+          nonFoodMessage: wittyMsg,
+        ),
+      );
+    }
 
     if (rawName.isEmpty ||
         calories == null ||
         protein == null ||
         carbs == null ||
-        fat == null) {
+        fat == null ||
+        calories < 0 ||
+        protein < 0 ||
+        carbs < 0 ||
+        fat < 0) {
       _logSafe('Incomplete or invalid nutritional fields: $foodData', apiKey);
       return left(
         NetworkFailure(invalidResponseErrorMessage, cause: foodData),
@@ -471,9 +562,17 @@ class FoodRemoteDataSource {
         protein: protein,
         carbs: carbs,
         fat: fat,
-        quantity: 100.0,
+        quantity: servingSize,
         imageUrl: imagePath,
         timestamp: DateTime.now(),
+        isFood: true,
+        servingSize: servingSize,
+        servingUnit: servingUnit,
+        baseCalories: calories,
+        baseProtein: protein,
+        baseCarbs: carbs,
+        baseFat: fat,
+        nonFoodMessage: null,
       ),
     );
   }
@@ -484,7 +583,7 @@ class FoodRemoteDataSource {
       if (!imageFile.existsSync()) {
         return left(
           CacheFailure(
-            'No se encontró el archivo de la imagen capturada.',
+            'Captured image file was not found.',
             cause: imageFile.path,
           ),
         );

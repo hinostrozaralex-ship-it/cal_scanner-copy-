@@ -83,7 +83,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Por favor, completa tu nombre, edad, peso y talla',
+            'Please fill in your name, age, weight, and height',
             style: AppTypography.bodyMedium.copyWith(color: AppColors.kWhite),
           ),
           backgroundColor: AppColors.kBlack,
@@ -124,7 +124,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               SizedBox(height: 8.h),
               Text(
-                'Bienvenido a Cal AI',
+                'Welcome to Cal AI',
                 style: AppTypography.displaySmall.copyWith(
                   fontSize: 26.sp,
                   color: AppColors.kBlack,
@@ -132,7 +132,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               SizedBox(height: 6.h),
               Text(
-                'Configura tu perfil y tu clave de Gemini para comenzar a escanear tus comidas.',
+                'Set up your profile and Gemini API key to start scanning your meals.',
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.kBlack.withValues(alpha: 0.65),
                   fontSize: 13.5.sp,
@@ -140,9 +140,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               SizedBox(height: 22.h),
 
-              // Selector de Sistema de Unidades
               Text(
-                'Sistema de Unidades',
+                'Unit System',
                 style: AppTypography.titleMedium.copyWith(
                   fontWeight: FontWeight.w600,
                   color: AppColors.kBlack,
@@ -155,30 +154,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               SizedBox(height: 20.h),
 
-              // Nombre / Alias
-              _FieldLabel('Nombre / Alias'),
+              _FieldLabel('Name / Alias'),
               SizedBox(height: 6.h),
               _StyledInputField(
                 controller: _nameController,
-                hintText: 'Ej. Alex',
+                hintText: 'e.g. Alex',
                 keyboardType: TextInputType.name,
                 prefixIcon: Icons.person_outline,
               ),
               SizedBox(height: 16.h),
 
-              // Edad, Peso y Talla
               Row(
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _FieldLabel('Edad'),
+                        _FieldLabel('Age'),
                         SizedBox(height: 6.h),
                         _StyledInputField(
                           controller: _ageController,
                           hintText: '25',
-                          suffixText: 'años',
+                          suffixText: 'yrs',
                           keyboardType: TextInputType.number,
                         ),
                       ],
@@ -189,7 +186,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _FieldLabel('Peso ($weightUnit)'),
+                        _FieldLabel('Weight ($weightUnit)'),
                         SizedBox(height: 6.h),
                         _StyledInputField(
                           controller: _weightController,
@@ -207,7 +204,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _FieldLabel('Talla ($heightUnit)'),
+                        _FieldLabel('Height ($heightUnit)'),
                         SizedBox(height: 6.h),
                         _StyledInputField(
                           controller: _heightController,
@@ -224,7 +221,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               SizedBox(height: 22.h),
 
-              // Gemini API Key
               Row(
                 children: [
                   Icon(
@@ -238,7 +234,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               SizedBox(height: 4.h),
               Text(
-                'Obtén tu clave gratuita en Google AI Studio',
+                'Get your free key from Google AI Studio',
                 style: AppTypography.bodySmall.copyWith(
                   fontSize: 12.sp,
                   color: AppColors.kBlack.withValues(alpha: 0.6),
@@ -247,7 +243,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               SizedBox(height: 8.h),
               _StyledInputField(
                 controller: _apiKeyController,
-                hintText: 'Pega tu Gemini API Key aquí',
+                hintText: 'Paste your Gemini API Key here',
                 obscureText: _obscureApiKey,
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -265,7 +261,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               SizedBox(height: 32.h),
 
               AppButton(
-                text: 'Comenzar',
+                text: 'Get Started',
                 onTap: _completeOnboarding,
               ),
               SizedBox(height: 16.h),
@@ -326,7 +322,7 @@ class _UnitSystemSelector extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  'Métrico (kg / cm)',
+                  'Metric (kg / cm)',
                   style: AppTypography.titleSmall.copyWith(
                     color: isMetric ? AppColors.kWhite : AppColors.kBlack,
                     fontWeight: FontWeight.w600,

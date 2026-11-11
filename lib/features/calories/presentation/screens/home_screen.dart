@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: AppColors.kBlack,
               size: 24.sp,
             ),
-            tooltip: 'Ajustes y Perfil',
+            tooltip: 'Settings & Profile',
             onPressed: () async {
               final updated = await Navigator.push<bool>(
                 context,

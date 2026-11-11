@@ -48,7 +48,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          'API Key guardada correctamente',
+          'API Key saved successfully',
           style: AppTypography.bodyMedium.copyWith(color: AppColors.kWhite),
         ),
         backgroundColor: AppColors.kBlack,
@@ -121,7 +121,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 SizedBox(width: 6.w),
                 Expanded(
                   child: Text(
-                    'Obtén tu clave gratuita en Google AI Studio',
+                    'Get your free key from Google AI Studio',
                     style: AppTypography.bodySmall.copyWith(
                       fontSize: 12.sp,
                       color: AppColors.kBlack.withValues(alpha: 0.65),
@@ -145,7 +145,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 cursorColor: AppColors.kOrange,
                 style: AppTypography.bodyMedium.copyWith(fontSize: 14.sp),
                 decoration: InputDecoration(
-                  hintText: 'Pega tu Gemini API Key aquí',
+                  hintText: 'Paste your Gemini API Key here',
                   hintStyle: AppTypography.bodyMedium.copyWith(
                     fontSize: 14.sp,
                     color: AppColors.kBlack.withValues(alpha: 0.4),
@@ -205,7 +205,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                       ),
                     ),
                     child: Text(
-                      'Cancelar',
+                      'Cancel',
                       style: AppTypography.titleMedium.copyWith(
                         color: AppColors.kBlack,
                         fontSize: 14.sp,
@@ -227,7 +227,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                       ),
                     ),
                     child: Text(
-                      'Guardar',
+                      'Save',
                       style: AppTypography.titleMedium.copyWith(
                         color: AppColors.kWhite,
                         fontWeight: FontWeight.w600,

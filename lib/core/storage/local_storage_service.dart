@@ -171,6 +171,10 @@ class LocalStorageService {
     await _prefs.setString(_mealsKey, serialized);
   }
 
+  Future<void> updateMeal(MealRecord meal) async {
+    await saveMeal(meal);
+  }
+
   Future<List<MealRecord>> getMealsByDate(DateTime date) async {
     final meals = await _getAllMeals();
     return meals.where((meal) {

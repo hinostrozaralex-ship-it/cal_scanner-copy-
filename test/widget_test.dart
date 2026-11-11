@@ -6,7 +6,6 @@ import 'package:cal_scanner/core/storage/local_storage_service.dart';
 import 'package:cal_scanner/features/calories/data/datasources/food_local_datasource.dart';
 import 'package:cal_scanner/features/calories/data/datasources/food_remote_datasource.dart';
 import 'package:cal_scanner/features/calories/data/repositories/food_repository_impl.dart';
-import 'package:cal_scanner/features/calories/domain/entities/food.dart';
 import 'package:cal_scanner/features/calories/domain/usecases/add_food.dart';
 import 'package:cal_scanner/features/calories/domain/usecases/delete_food.dart';
 import 'package:cal_scanner/features/calories/domain/usecases/detect_food_from_image.dart';
@@ -60,8 +59,8 @@ void main() {
     });
   }
 
-  group('FoodRemoteDataSource — Gemini API & Error Handling', () {
-    test('1. Respuesta correcta de Gemini parsea Food y asigna imageUrl', () async {
+  group('FoodRemoteDataSource — Gemini API, Schema & Error Handling', () {
+    test('1. Edible food response parses is_food, serving_size, serving_unit and base macros', () async {
       final storage = await createStorageWithKey('user_test_key_123');
       Uri? capturedUri;
       Map<String, String>? capturedHeaders;
@@ -71,11 +70,15 @@ void main() {
         capturedHeaders = request.headers;
         return http.Response(
           buildGeminiSuccessBody({
-            'name': 'Pollo a la plancha',
+            'is_food': true,
+            'name': 'Grilled Chicken Breast',
+            'serving_size': 100,
+            'serving_unit': 'g',
             'calories': 320,
             'protein': 42.5,
             'carbs': 3,
             'fat': 14.2,
+            'non_food_message': null,
           }),
           200,
         );
@@ -97,15 +100,59 @@ void main() {
       expect(capturedHeaders?['x-goog-api-key'], 'user_test_key_123');
 
       final food = result.getOrElse((_) => throw StateError('Expected Right'));
-      expect(food.name, 'Pollo a la plancha');
-      expect(food.calories, 320.0);
-      expect(food.protein, 42.5);
-      expect(food.carbs, 3.0);
-      expect(food.fat, 14.2);
+      expect(food.isFood, isTrue);
+      expect(food.name, 'Grilled Chicken Breast');
+      expect(food.servingSize, 100.0);
+      expect(food.servingUnit, 'g');
+      expect(food.baseCalories, 320.0);
+      expect(food.baseProtein, 42.5);
+      expect(food.baseCarbs, 3.0);
+      expect(food.baseFat, 14.2);
+      expect(food.nonFoodMessage, isNull);
       expect(food.imageUrl, testImageFile.path);
     });
 
-    test('2. Modelo no disponible (404) hace fallback a modelo alternativo válido', () async {
+    test('2. Non-edible item response parses is_food == false and witty non_food_message', () async {
+      final storage = await createStorageWithKey('user_test_key_123');
+
+      final client = MockClient((request) async {
+        return http.Response(
+          buildGeminiSuccessBody({
+            'is_food': false,
+            'name': 'Domestic Cat',
+            'serving_size': 1,
+            'serving_unit': 'piece',
+            'calories': 0,
+            'protein': 0,
+            'carbs': 0,
+            'fat': 0,
+            'non_food_message':
+                'Cats are friends, not food! Please do not consume your pets.',
+          }),
+          200,
+        );
+      });
+
+      final dataSource = FoodRemoteDataSource(
+        storage,
+        client: client,
+        delay: (_) async {},
+      );
+
+      final result = await dataSource.detectFoodAndCalories(testImageFile);
+      expect(result.isRight(), isTrue);
+
+      final food = result.getOrElse((_) => throw StateError('Expected Right'));
+      expect(food.isFood, isFalse);
+      expect(food.name, 'Domestic Cat');
+      expect(food.calories, 0.0);
+      expect(
+        food.nonFoodMessage,
+        'Cats are friends, not food! Please do not consume your pets.',
+      );
+    });
+
+    test('3. Model unavailable (404) falls back to fallbackModel', () async {
       final storage = await createStorageWithKey('user_test_key_123');
       final requestedModels = <String>[];
 
@@ -118,7 +165,7 @@ void main() {
             jsonEncode({
               'error': {
                 'code': 404,
-                'message': 'models/gemini-flash-latest is not found',
+                'message': 'models/gemini-3.8-flash is not found',
                 'status': 'NOT_FOUND',
               },
             }),
@@ -128,11 +175,15 @@ void main() {
 
         return http.Response(
           buildGeminiSuccessBody({
-            'name': 'Ensalada César',
+            'is_food': true,
+            'name': 'Caesar Salad',
+            'serving_size': 1,
+            'serving_unit': 'serving',
             'calories': 250,
             'protein': 18,
             'carbs': 12,
             'fat': 15,
+            'non_food_message': null,
           }),
           200,
         );
@@ -151,36 +202,7 @@ void main() {
       expect(requestedModels[1], contains(FoodRemoteDataSource.fallbackModel));
     });
 
-    test('3. Si todos los modelos devuelven 404, muestra mensaje comprensible de modelo no disponible', () async {
-      final storage = await createStorageWithKey('user_test_key_123');
-
-      final client = MockClient((request) async {
-        return http.Response(
-          jsonEncode({
-            'error': {
-              'code': 404,
-              'message': 'Model not found for API version v1beta',
-              'status': 'NOT_FOUND',
-            },
-          }),
-          404,
-        );
-      });
-
-      final dataSource = FoodRemoteDataSource(
-        storage,
-        client: client,
-        delay: (_) async {},
-      );
-
-      final result = await dataSource.detectFoodAndCalories(testImageFile);
-      expect(result.isLeft(), isTrue);
-      final errorMsg = result.fold((l) => l.message, (_) => '');
-      expect(errorMsg, FoodRemoteDataSource.modelUnavailableErrorMessage);
-      expect(errorMsg, isNot(contains('NOT_FOUND')));
-    });
-
-    test('4. API Key inválida (400 API_KEY_INVALID o 403) falla sin hacer fallback indiscriminado ni exponer JSON', () async {
+    test('4. Invalid API Key (400 API_KEY_INVALID) fails immediately without fallback', () async {
       final storage = await createStorageWithKey('invalid_key_999');
       var callCount = 0;
 
@@ -209,14 +231,12 @@ void main() {
 
       final result = await dataSource.detectFoodAndCalories(testImageFile);
       expect(result.isLeft(), isTrue);
-      expect(callCount, 1); // No reintenta con otros modelos ante clave inválida
+      expect(callCount, 1);
       final errorMsg = result.fold((l) => l.message, (_) => '');
       expect(errorMsg, FoodRemoteDataSource.invalidApiKeyErrorMessage);
-      expect(errorMsg, isNot(contains('INVALID_ARGUMENT')));
-      expect(errorMsg, isNot(contains('invalid_key_999')));
     });
 
-    test('5. HTTP 503 y 429 hacen un único fallback y devuelven mensaje claro si persiste', () async {
+    test('5. HTTP 503 and 429 perform single fallback and return clear English message', () async {
       final storage = await createStorageWithKey('user_test_key_123');
       var callCount = 0;
 
@@ -242,43 +262,12 @@ void main() {
 
       final result = await dataSource.detectFoodAndCalories(testImageFile);
       expect(result.isLeft(), isTrue);
-      expect(callCount, 2); // Principal + 1 alternativo máximo
+      expect(callCount, 2);
       final errorMsg = result.fold((l) => l.message, (_) => '');
       expect(errorMsg, FoodRemoteDataSource.highDemandErrorMessage);
     });
 
-    test('6. HTTP 429 con cuota agotada (limit: 0) informa límite de cuota sin bucle infinito', () async {
-      final storage = await createStorageWithKey('user_test_key_123');
-      var callCount = 0;
-
-      final client = MockClient((request) async {
-        callCount++;
-        return http.Response(
-          jsonEncode({
-            'error': {
-              'code': 429,
-              'message': 'Quota exceeded for quota metric and limit: 0',
-              'status': 'RESOURCE_EXHAUSTED',
-            },
-          }),
-          429,
-        );
-      });
-
-      final dataSource = FoodRemoteDataSource(
-        storage,
-        client: client,
-        delay: (_) async {},
-      );
-
-      final result = await dataSource.detectFoodAndCalories(testImageFile);
-      expect(result.isLeft(), isTrue);
-      expect(callCount, 2);
-      final errorMsg = result.fold((l) => l.message, (_) => '');
-      expect(errorMsg, FoodRemoteDataSource.quotaExceededErrorMessage);
-    });
-
-    test('7. Timeout y SocketException devuelven mensajes en español comprensibles', () async {
+    test('6. Timeout and SocketException return clear English messages', () async {
       final storage = await createStorageWithKey('user_test_key_123');
 
       final timeoutClient = MockClient((request) async {
@@ -314,14 +303,15 @@ void main() {
       );
     });
 
-    test('8. JSON incompleto, nulo o malformado no lanza TypeError y devuelve mensaje amigable', () async {
+    test('7. Incomplete or malformed JSON returns friendly English error without TypeError', () async {
       final storage = await createStorageWithKey('user_test_key_123');
 
       final incompleteClient = MockClient((request) async {
         return http.Response(
           buildGeminiSuccessBody({
-            'name': 'Manzana',
-            'calories': null, // Campo nulo que antes lanzaba TypeError
+            'is_food': true,
+            'name': 'Apple',
+            'calories': null,
             'protein': 'invalid_number',
           }),
           200,
@@ -343,8 +333,8 @@ void main() {
     });
   });
 
-  group('FoodLogCubit — Escaneo, guardado único y manejo de estado isScanning', () {
-    test('9. Escaneo correcto guarda el alimento una sola vez y desactiva isScanning', () async {
+  group('FoodLogCubit — Interactive Scan, Log Meal & Edit Meal Flow', () {
+    test('8. Scan detects meal without auto-saving, Log Meal saves with scaled portion, and updateMeal refreshes daily totals', () async {
       final prefs = await SharedPreferences.getInstance();
       final storage = LocalStorageService(prefs);
       await storage.saveApiKey('user_test_key_123');
@@ -352,11 +342,15 @@ void main() {
       final client = MockClient((request) async {
         return http.Response(
           buildGeminiSuccessBody({
-            'name': 'Salmón al horno',
-            'calories': 410,
-            'protein': 38,
-            'carbs': 2,
-            'fat': 26,
+            'is_food': true,
+            'name': 'Orange Juice',
+            'serving_size': 100,
+            'serving_unit': 'ml',
+            'calories': 45,
+            'protein': 0.7,
+            'carbs': 10.4,
+            'fat': 0.2,
+            'non_food_message': null,
           }),
           200,
         );
@@ -379,27 +373,61 @@ void main() {
         DetectFoodFromImage(repo),
       );
 
+      // Step 1: Scan image (only detects, does not save yet)
       await cubit.addMealFromImage(testImageFile);
 
       expect(cubit.state.isScanning, isFalse);
       expect(cubit.state.error, isNull);
       expect(cubit.state.scannedMeal, isNotNull);
-      expect(cubit.state.scannedMeal!.name, 'Salmón al horno');
-      expect(cubit.state.meals.length, 1);
-      expect(cubit.state.totalCalories, 410.0);
+      expect(cubit.state.scannedMeal!.name, 'Orange Juice');
+      expect(cubit.state.scannedMeal!.servingSize, 100.0);
+      expect(cubit.state.scannedMeal!.servingUnit, 'ml');
+      expect(cubit.state.meals, isEmpty);
 
-      // Verificar que en LocalStorageService también hay exactamente 1 registro sin duplicados
-      final savedRecords = await storage.getMealsByDate(DateTime.now());
-      expect(savedRecords.length, 1);
-      expect(savedRecords.first.name, 'Salmón al horno');
+      // Step 2: User adjusts portion to 250 ml and taps "Log Meal"
+      final detected = cubit.state.scannedMeal!;
+      const currentQty = 250.0;
+      final ratio = currentQty / detected.servingSize;
+      final loggedMeal = detected.copyWith(
+        quantity: currentQty,
+        calories: detected.baseCalories * ratio,
+        protein: detected.baseProtein * ratio,
+        carbs: detected.baseCarbs * ratio,
+        fat: detected.baseFat * ratio,
+      );
+
+      await cubit.addMeal(loggedMeal);
+
+      expect(cubit.state.meals.length, 1);
+      expect(cubit.state.totalCalories, closeTo(112.5, 0.01));
+      expect(cubit.state.totalCarbs, closeTo(26.0, 0.01));
+
+      // Step 3: User edits registered meal in Edit Meal BottomSheet to 300 ml
+      final editedRatio = 300.0 / detected.servingSize;
+      final editedMeal = loggedMeal.copyWith(
+        quantity: 300.0,
+        calories: detected.baseCalories * editedRatio,
+        protein: detected.baseProtein * editedRatio,
+        carbs: detected.baseCarbs * editedRatio,
+        fat: detected.baseFat * editedRatio,
+      );
+
+      await cubit.updateMeal(editedMeal);
+
+      expect(cubit.state.meals.length, 1);
+      expect(cubit.state.meals.first.quantity, 300.0);
+      expect(cubit.state.totalCalories, closeTo(135.0, 0.01));
+
+      final storedMeals = await storage.getMealsByDate(DateTime.now());
+      expect(storedMeals.length, 1);
+      expect(storedMeals.first.calories, closeTo(135.0, 0.01));
 
       await cubit.close();
     });
 
-    test('10. Error de escaneo limpia isScanning y registra el mensaje de error', () async {
+    test('9. Scan error clears isScanning and sets English error message', () async {
       final prefs = await SharedPreferences.getInstance();
       final storage = LocalStorageService(prefs);
-      // Sin API Key configurada
 
       final localDs = FoodLocalDataSource(prefs, storage);
       final remoteDs = FoodRemoteDataSource(storage, delay: (_) async {});

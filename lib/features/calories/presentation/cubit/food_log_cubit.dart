@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:cal_scanner/core/di/service_locator.dart';
+import 'package:cal_scanner/core/storage/local_storage_service.dart';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -70,10 +72,21 @@ class FoodLogCubit extends Cubit<FoodLogState> {
   }
 
   Future<void> addMeal(Food meal) async {
+    final mealDay = DateTime(
+      meal.timestamp.year,
+      meal.timestamp.month,
+      meal.timestamp.day,
+    );
+    emit(state.copyWith(selectedDate: mealDay));
+
     final result = await _addFood(meal);
+    if (sl.isRegistered<LocalStorageService>()) {
+      await sl<LocalStorageService>().saveMeal(MealRecord.fromFood(meal));
+    }
+
     await result.fold(
       (l) async => emit(state.copyWith(error: l.message)),
-      (_) async => loadDailyLog(),
+      (_) async => loadDailyLog(preserveScannedMeal: meal),
     );
   }
 
@@ -118,28 +131,18 @@ class FoodLogCubit extends Cubit<FoodLogState> {
         );
         final todayNormalized = DateTime(now.year, now.month, now.day);
 
-        final addResult = await _addFood(stampedMeal);
-        if (addResult.isLeft()) {
-          emit(
-            state.copyWith(
-              error: addResult.fold((l) => l.message, (_) => null),
-              successMessage: null,
-              isScanning: false,
-            ),
-          );
-          return;
-        }
-
         emit(
           state.copyWith(
             selectedDate: todayNormalized,
             scannedMeal: stampedMeal,
             isScanning: false,
             error: null,
-            successMessage: 'Food "${stampedMeal.name}" detected successfully',
+            clearError: true,
+            successMessage: stampedMeal.isFood
+                ? 'Food "${stampedMeal.name}" detected successfully'
+                : null,
           ),
         );
-        await loadDailyLog(preserveScannedMeal: stampedMeal);
       },
     );
   }
@@ -173,6 +176,9 @@ class FoodLogCubit extends Cubit<FoodLogState> {
   }
 
   Future<void> updateMeal(Food meal) async {
+    if (sl.isRegistered<LocalStorageService>()) {
+      await sl<LocalStorageService>().updateMeal(MealRecord.fromFood(meal));
+    }
     final result = await _updateFood(meal);
     await result.fold(
       (l) async => emit(state.copyWith(error: l.message)),
