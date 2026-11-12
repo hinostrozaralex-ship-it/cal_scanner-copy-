@@ -28,8 +28,7 @@ jobs:
         run: flutter pub get
 
       - name: Crear archivo .env
-        run: |
-          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
+        run: echo "GEMINI_API_KEY=" > .env
 
       - name: Compilar APK
         run: flutter build apk --release
