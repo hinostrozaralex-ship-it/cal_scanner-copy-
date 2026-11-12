@@ -37,31 +37,31 @@ class LocalStorageService {
     // Sincronizar metas calóricas y de macronutrientes con DailyTracker
     final isImperial = profile.unitSystem == 'imperial';
     final weightKg = isImperial ? profile.weight / 2.20462262 : profile.weight;
+    final targetWeightKg =
+        isImperial ? profile.targetWeight / 2.20462262 : profile.targetWeight;
     final heightCm = isImperial ? profile.height * 2.54 : profile.height;
 
-    final maintenanceCalories = CalorieCalculator.fallbackEstimateCalories(
-      weight: weightKg > 0 ? weightKg : 70.0,
-      height: heightCm > 0 ? heightCm : 170.0,
+    final plan = CalorieCalculator.calculatePlanForProfile(
+      weightKg: weightKg > 0 ? weightKg : 70.0,
+      heightCm: heightCm > 0 ? heightCm : 170.0,
       age: profile.age > 0 ? profile.age : 25,
-      activityLevel: 'Moderate',
-      gender: 'Other',
-    );
-    final macros = CalorieCalculator.calculateMacroGoals(
-      calories: maintenanceCalories,
-      goal: 'Maintenance',
+      gender: profile.gender,
+      goal: profile.goal,
+      targetWeightKg: targetWeightKg > 0 ? targetWeightKg : weightKg,
+      goalWeeks: profile.goalWeeks > 0 ? profile.goalWeeks : 8,
     );
 
     final userDataMap = {
       'weight': weightKg,
       'height': heightCm,
       'age': profile.age,
-      'activityLevel': 'Moderate',
-      'gender': 'Other',
-      'goal': 'Maintenance',
-      'estimatedCalories': maintenanceCalories,
-      'proteinGoal': macros['proteinGoal'] ?? 125,
-      'fatGoal': macros['fatGoal'] ?? 55,
-      'carbsGoal': macros['carbsGoal'] ?? 250,
+      'activityLevel': 'Light',
+      'gender': profile.gender,
+      'goal': profile.goal,
+      'estimatedCalories': plan['targetCalories'] ?? 2000,
+      'proteinGoal': plan['proteinGoal'] ?? 125,
+      'fatGoal': plan['fatGoal'] ?? 55,
+      'carbsGoal': plan['carbsGoal'] ?? 250,
     };
     await _prefs.setString(_userDataKey, jsonEncode(userDataMap));
   }

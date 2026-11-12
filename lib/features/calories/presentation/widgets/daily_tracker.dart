@@ -1,6 +1,7 @@
 import 'package:cal_scanner/core/di/service_locator.dart';
 import 'package:cal_scanner/core/extensions/widget_extension.dart';
 import 'package:cal_scanner/core/storage/local_storage_service.dart';
+import 'package:cal_scanner/core/utils/calorie_calculator.dart';
 import 'package:cal_scanner/theme/app_colors.dart';
 import 'package:cal_scanner/theme/app_typography.dart';
 import 'package:flutter/material.dart';
@@ -60,12 +61,48 @@ class _DailyTrackerState extends State<DailyTracker> {
     final heightUnit = isMetric ? 'cm' : 'in';
     final namePrefix =
         profile.name.isNotEmpty ? '${profile.name}  •  ' : '';
+
+    if (profile.goal != 'Maintenance' &&
+        (profile.targetWeight - profile.weight).abs() >= 0.1) {
+      final weeksText =
+          profile.goalWeeks > 0 ? ' (${profile.goalWeeks}w)' : '';
+      return '$namePrefix${profile.weight.toStringAsFixed(1)} → ${profile.targetWeight.toStringAsFixed(1)} $weightUnit$weeksText  •  ${profile.height.toStringAsFixed(1)} $heightUnit';
+    }
+
     return '$namePrefix${profile.weight.toStringAsFixed(1)} $weightUnit  •  ${profile.height.toStringAsFixed(1)} $heightUnit';
+  }
+
+  Map<String, int>? _profilePlanFallback() {
+    final profile = userProfile;
+    if (profile == null) return null;
+    final isImperial = profile.unitSystem == 'imperial';
+    final weightKg = isImperial ? profile.weight / 2.20462262 : profile.weight;
+    final targetWeightKg =
+        isImperial ? profile.targetWeight / 2.20462262 : profile.targetWeight;
+    final heightCm = isImperial ? profile.height * 2.54 : profile.height;
+
+    return CalorieCalculator.calculatePlanForProfile(
+      weightKg: weightKg,
+      heightCm: heightCm,
+      age: profile.age,
+      gender: profile.gender,
+      goal: profile.goal,
+      targetWeightKg: targetWeightKg,
+      goalWeeks: profile.goalWeeks,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final targetCalories = userData?.estimatedCalories.toDouble() ?? 2000.0;
+    final plan = _profilePlanFallback();
+    final targetCalories =
+        (plan?['targetCalories'] ?? userData?.estimatedCalories ?? 2000)
+            .toDouble();
+    final proteinGoal =
+        (plan?['proteinGoal'] ?? userData?.proteinGoal ?? 125).toDouble();
+    final carbsGoal =
+        (plan?['carbsGoal'] ?? userData?.carbsGoal ?? 250).toDouble();
+    final fatGoal = (plan?['fatGoal'] ?? userData?.fatGoal ?? 55).toDouble();
     final unitSummary = _formattedUnitSummary();
 
     return Column(
@@ -124,19 +161,19 @@ class _DailyTrackerState extends State<DailyTracker> {
             MacroIndicator(
               label: 'Protein',
               value: widget.protein,
-              goal: (userData?.proteinGoal ?? 125).toDouble(),
+              goal: proteinGoal,
               color: Colors.green,
             ),
             MacroIndicator(
               label: 'Carbs',
               value: widget.carbs,
-              goal: (userData?.carbsGoal ?? 250).toDouble(),
+              goal: carbsGoal,
               color: Colors.amber,
             ),
             MacroIndicator(
               label: 'Fat',
               value: widget.fat,
-              goal: (userData?.fatGoal ?? 55).toDouble(),
+              goal: fatGoal,
               color: Colors.orange,
             ),
           ],

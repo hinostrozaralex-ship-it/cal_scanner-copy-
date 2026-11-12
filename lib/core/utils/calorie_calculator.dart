@@ -129,4 +129,145 @@ class CalorieCalculator {
 
     return (weight * proteinMultiplier).round();
   }
+
+  /// Returns medically safe target weight bounds (in kg) based on current weight,
+  /// height (BMI >= 18.5), and safe per-cycle body weight change limits.
+  static Map<String, double> getSafeWeightBounds({
+    required double currentWeightKg,
+    required double heightCm,
+    required String goal,
+  }) {
+    final safeCurrentKg = currentWeightKg > 20 ? currentWeightKg : 70.0;
+    final safeHeightM = (heightCm > 100 ? heightCm : 170.0) / 100.0;
+    final bmiMinKg = 18.5 * safeHeightM * safeHeightM;
+
+    if (goal == 'Weight Loss') {
+      // Max 15% body weight loss in a single cycle, and never below BMI 18.5
+      double minKg = safeCurrentKg * 0.85;
+      if (bmiMinKg > minKg && bmiMinKg < safeCurrentKg - 0.5) {
+        minKg = bmiMinKg;
+      }
+      final maxKg = (safeCurrentKg - 0.5).clamp(minKg, safeCurrentKg);
+      return {
+        'minKg': double.parse(minKg.toStringAsFixed(1)),
+        'maxKg': double.parse(maxKg.toStringAsFixed(1)),
+      };
+    } else if (goal == 'Muscle Gain') {
+      final minKg = safeCurrentKg + 0.5;
+      // Max +12% body weight gain in a single cycle
+      double maxKg = safeCurrentKg * 1.12;
+      if (maxKg < minKg + 1.0) {
+        maxKg = minKg + 2.0;
+      }
+      return {
+        'minKg': double.parse(minKg.toStringAsFixed(1)),
+        'maxKg': double.parse(maxKg.toStringAsFixed(1)),
+      };
+    }
+
+    return {
+      'minKg': double.parse(safeCurrentKg.toStringAsFixed(1)),
+      'maxKg': double.parse(safeCurrentKg.toStringAsFixed(1)),
+    };
+  }
+
+  /// Suggests a healthy target weight (in kg) for a given timeframe in weeks.
+  /// Standard healthy rates: -0.5 kg/week for weight loss, +0.3 kg/week for muscle gain.
+  static double suggestTargetWeightForWeeks({
+    required double currentWeightKg,
+    required double heightCm,
+    required String goal,
+    required int weeks,
+  }) {
+    if (goal == 'Maintenance') return currentWeightKg;
+
+    final bounds = getSafeWeightBounds(
+      currentWeightKg: currentWeightKg,
+      heightCm: heightCm,
+      goal: goal,
+    );
+    final safeWeeks = weeks.clamp(1, 52);
+
+    if (goal == 'Weight Loss') {
+      final rawTarget = currentWeightKg - (safeWeeks * 0.5);
+      return rawTarget.clamp(bounds['minKg']!, bounds['maxKg']!);
+    } else if (goal == 'Muscle Gain') {
+      final rawTarget = currentWeightKg + (safeWeeks * 0.3);
+      return rawTarget.clamp(bounds['minKg']!, bounds['maxKg']!);
+    }
+    return currentWeightKg;
+  }
+
+  /// Suggests a healthy number of weeks to reach a target weight (both in kg).
+  static int suggestWeeksForTargetWeight({
+    required double currentWeightKg,
+    required double targetWeightKg,
+    required String goal,
+  }) {
+    if (goal == 'Maintenance') return 0;
+    final deltaKg = (targetWeightKg - currentWeightKg).abs();
+    if (deltaKg < 0.1) return 1;
+
+    if (goal == 'Weight Loss') {
+      return (deltaKg / 0.5).round().clamp(1, 52);
+    } else if (goal == 'Muscle Gain') {
+      return (deltaKg / 0.3).round().clamp(1, 52);
+    }
+    return 8;
+  }
+
+  /// Calculates daily target calories and macro goals (protein, carbs, fat in grams)
+  /// taking into account sex, age, weight, height, goal, target weight, and timeframe.
+  static Map<String, int> calculatePlanForProfile({
+    required double weightKg,
+    required double heightCm,
+    required int age,
+    required String gender,
+    required String goal,
+    required double targetWeightKg,
+    required int goalWeeks,
+  }) {
+    final safeWeight = weightKg > 20 ? weightKg : 70.0;
+    final safeHeight = heightCm > 100 ? heightCm : 170.0;
+    final safeAge = age > 5 ? age : 25;
+
+    final maintenanceCalories = fallbackEstimateCalories(
+      weight: safeWeight,
+      height: safeHeight,
+      age: safeAge,
+      activityLevel: 'Light',
+      gender: gender,
+    );
+
+    int targetCalories = maintenanceCalories;
+
+    if (goal == 'Weight Loss') {
+      final deltaKg = (safeWeight - targetWeightKg).clamp(0.5, safeWeight * 0.2);
+      final days = (goalWeeks.clamp(1, 52)) * 7;
+      final dailyDeficit = ((deltaKg * 7700) / days).round().clamp(250, 750);
+      final minSafeCalories = gender == 'Female' ? 1200 : 1500;
+      targetCalories = (maintenanceCalories - dailyDeficit).clamp(
+        minSafeCalories,
+        maintenanceCalories,
+      );
+    } else if (goal == 'Muscle Gain') {
+      final deltaKg = (targetWeightKg - safeWeight).clamp(0.5, safeWeight * 0.2);
+      final days = (goalWeeks.clamp(1, 52)) * 7;
+      final dailySurplus = ((deltaKg * 7700) / days).round().clamp(200, 500);
+      targetCalories = maintenanceCalories + dailySurplus;
+    }
+
+    final macros = calculateMacroGoals(
+      calories: targetCalories,
+      goal: goal,
+    );
+
+    return {
+      'maintenanceCalories': maintenanceCalories,
+      'targetCalories': targetCalories,
+      'proteinGoal': macros['proteinGoal'] ?? 125,
+      'carbsGoal': macros['carbsGoal'] ?? 250,
+      'fatGoal': macros['fatGoal'] ?? 55,
+    };
+  }
 }
