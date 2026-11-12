@@ -157,7 +157,10 @@ Analyze the provided image and return ONLY a valid raw JSON object (without mark
 Guidelines:
 - All text fields must be in English.
 - If the image shows a non-food item (person, pet, electronics, furniture), set is_food to false, set calories and macros to 0, and provide a humorous, clever non_food_message related to what is visible.
-- If it is food, set is_food to true, non_food_message to null, and calculate realistic baseline nutritional values.
+- If it is food, set is_food to true and non_food_message to null.
+- If a nutrition facts table is visible, read it and use its exact values. When the values are given per 100 g or per 100 ml, scale them to the full package size printed on the pack and set serving_size and serving_unit to that package size (for example 330 and "ml"). If no package size is visible, use serving_size 100 with the unit shown on the label.
+- If no nutrition table is visible, identify the product and use its typical official nutrition values for the whole package or the visible portion. Do not overestimate.
+- calories, protein, carbs and fat must always match the serving_size and serving_unit you return.
 ''',
                   },
                   {
