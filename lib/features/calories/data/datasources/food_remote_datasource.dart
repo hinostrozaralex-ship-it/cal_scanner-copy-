@@ -861,7 +861,7 @@ Guidelines:
         }
 
         // 3. Modelo no encontrado (404) o retirado para esta cuenta -> pasar al siguiente candidato
-        if (_isModelNotAvailableError(lastStatusCode, lastResponseBody)) {
+        if (_isModelNotAvailableError(lastStatusCode ?? 0, lastResponseBody ?? '')) {
           if (index >= modelsQueue.length && !discoveryAttempted) {
             discoveryAttempted = true;
             final discRemaining = totalOperationTimeout - stopwatch.elapsed;
@@ -1039,7 +1039,7 @@ Guidelines:
           } catch (_) {}
         }
 
-        if (_isModelNotAvailableError(lastStatusCode, lastResponseBody)) {
+        if (_isModelNotAvailableError(lastStatusCode ?? 0, lastResponseBody ?? '')) {
           continue;
         }
 
