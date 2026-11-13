@@ -11,7 +11,12 @@ abstract class FoodRepository {
   Future<Either<Failure, Unit>> deleteFood(Food food);
   Future<Either<Failure, Unit>> updateFood(Food food);
 
-  Future<Either<Failure, Food>> detectFoodFromImage(File image);
+  Future<Either<Failure, Food>> detectFoodFromImage(
+    File image, {
+    String? userHint,
+  });
+
+  Future<Either<Failure, Food>> estimateFoodFromText(String description);
 
   Future<Either<Failure, List<double>>> getWeeklyCalories({
     required DateTime endDate,

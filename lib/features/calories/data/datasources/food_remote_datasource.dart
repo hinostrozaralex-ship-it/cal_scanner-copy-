@@ -118,6 +118,7 @@ class FoodRemoteDataSource {
     required String apiKey,
     required String base64Image,
     required String mimeType,
+    String? userHint,
     Duration timeout = const Duration(seconds: 60),
     bool includeThinkingConfig = true,
   }) {
@@ -128,6 +129,11 @@ class FoodRemoteDataSource {
     final thinkingConfig = includeThinkingConfig
         ? _buildThinkingConfigForModel(model)
         : null;
+
+    final trimmedHint = userHint?.trim() ?? '';
+    final hintSection = trimmedHint.isNotEmpty
+        ? '\nIMPORTANT USER HINT / CORRECTION:\nThe user states: "$trimmedHint".\nYou MUST prioritize this user correction/description to identify the food, its ingredients, and its quantities accurately (even if the image looks ambiguous).\n'
+        : '';
 
     return _client
         .post(
@@ -152,15 +158,26 @@ Analyze the provided image and return ONLY a valid raw JSON object (without mark
   "protein": number,
   "carbs": number,
   "fat": number,
-  "non_food_message": string or null
+  "non_food_message": string or null,
+  "ingredients": [
+    {
+      "name": string,
+      "serving_size": number,
+      "serving_unit": string,
+      "calories": number,
+      "protein": number,
+      "carbs": number,
+      "fat": number
+    }
+  ]
 }
+$hintSection
 Guidelines:
-- All text fields must be in English.
-- If the image shows a non-food item (person, pet, electronics, furniture), set is_food to false, set calories and macros to 0, and provide a humorous, clever non_food_message related to what is visible.
+- Keep the food and ingredient names in the language of the user hint if provided, otherwise in English.
+- If the image shows a non-food item (and no user food hint overrides it), set is_food to false, set calories and macros to 0, ingredients to [], and provide a humorous, clever non_food_message related to what is visible.
 - If it is food, set is_food to true and non_food_message to null.
-- If a nutrition facts table is visible, read it and use its exact values. When the values are given per 100 g or per 100 ml, scale them to the full package size printed on the pack and set serving_size and serving_unit to that package size (for example 330 and "ml"). If no package size is visible, use serving_size 100 with the unit shown on the label.
-- If no nutrition table is visible, identify the product and use its typical official nutrition values for the whole package or the visible portion. Do not overestimate.
-- calories, protein, carbs and fat must always match the serving_size and serving_unit you return.
+- Break down the meal into its distinct edible components in the "ingredients" array (e.g., for "Chicken with Rice", list "Cooked Rice", "Grilled Chicken", "Salad", etc. with their respective estimated serving_size in "g" or "ml" and their individual calories, protein, carbs, and fat). If it is a single item (e.g., an apple or a drink), include 1 item in "ingredients".
+- Total calories, protein, carbs, fat, and serving_size at the root object must equal the sum of the ingredients.
 ''',
                   },
                   {
@@ -175,7 +192,81 @@ Guidelines:
             'generationConfig': {
               'responseMimeType': 'application/json',
               'thinkingConfig': ?thinkingConfig,
-              'maxOutputTokens': 800,
+              'maxOutputTokens': 1200,
+            },
+          }),
+        )
+        .timeout(timeout);
+  }
+
+  Future<http.Response> _sendTextContentRequest({
+    required String model,
+    required String apiKey,
+    required String description,
+    Duration timeout = const Duration(seconds: 45),
+    bool includeThinkingConfig = true,
+  }) {
+    final url = Uri.parse(
+      'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent',
+    );
+
+    final thinkingConfig = includeThinkingConfig
+        ? _buildThinkingConfigForModel(model)
+        : null;
+
+    return _client
+        .post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: jsonEncode({
+            'contents': [
+              {
+                'parts': [
+                  {
+                    'text': '''
+Analyze the following food or meal description provided by the user:
+"$description"
+
+Return ONLY a valid raw JSON object (without markdown code blocks, backticks, or preamble) matching this schema:
+{
+  "is_food": true,
+  "name": string,
+  "serving_size": number,
+  "serving_unit": string,
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
+  "non_food_message": null,
+  "ingredients": [
+    {
+      "name": string,
+      "serving_size": number,
+      "serving_unit": string,
+      "calories": number,
+      "protein": number,
+      "carbs": number,
+      "fat": number
+    }
+  ]
+}
+Guidelines:
+- Use the same language as the user's description for "name" and ingredient names.
+- Break down the meal into its individual components in "ingredients" with realistic portions (in "g" or "ml") and accurate nutritional values (calories, protein, carbs, fat).
+- If the user described a single ingredient (e.g., "1 fried egg 50g"), return that single item in both the root fields and as 1 element in "ingredients".
+- Root calories, protein, carbs, fat, and serving_size must match the sum of the ingredients.
+''',
+                  },
+                ],
+              },
+            ],
+            'generationConfig': {
+              'responseMimeType': 'application/json',
+              'thinkingConfig': ?thinkingConfig,
+              'maxOutputTokens': 1200,
             },
           }),
         )
@@ -548,6 +639,69 @@ Guidelines:
       );
     }
 
+    final parsedIngredients = <FoodIngredient>[];
+    final rawIngredients = foodData['ingredients'];
+    if (rawIngredients is List) {
+      var idx = 0;
+      for (final item in rawIngredients) {
+        if (item is! Map) continue;
+        final ingName = item['name']?.toString().trim() ?? '';
+        if (ingName.isEmpty) continue;
+        final ingCal = _parseNonNegativeDouble(item['calories']) ?? 0.0;
+        final ingProt = _parseNonNegativeDouble(item['protein']) ?? 0.0;
+        final ingCarbs = _parseNonNegativeDouble(item['carbs']) ?? 0.0;
+        final ingFat = _parseNonNegativeDouble(item['fat']) ?? 0.0;
+        final ingSize = _parseNonNegativeDouble(
+              item['serving_size'] ?? item['servingSize'],
+            ) ??
+            100.0;
+        final safeIngSize = ingSize > 0 ? ingSize : 100.0;
+        final ingUnitRaw =
+            (item['serving_unit'] ?? item['servingUnit'])?.toString().trim() ??
+                '';
+        final ingUnit = ingUnitRaw.isNotEmpty ? ingUnitRaw : servingUnit;
+
+        parsedIngredients.add(
+          FoodIngredient(
+            id: '${DateTime.now().microsecondsSinceEpoch}_$idx',
+            name: ingName,
+            quantity: safeIngSize,
+            servingSize: safeIngSize,
+            servingUnit: ingUnit,
+            calories: ingCal,
+            protein: ingProt,
+            carbs: ingCarbs,
+            fat: ingFat,
+            baseCalories: ingCal,
+            baseProtein: ingProt,
+            baseCarbs: ingCarbs,
+            baseFat: ingFat,
+          ),
+        );
+        idx++;
+      }
+    }
+
+    if (parsedIngredients.isEmpty) {
+      parsedIngredients.add(
+        FoodIngredient(
+          id: '${DateTime.now().microsecondsSinceEpoch}_0',
+          name: rawName,
+          quantity: servingSize,
+          servingSize: servingSize,
+          servingUnit: servingUnit,
+          calories: calories,
+          protein: protein,
+          carbs: carbs,
+          fat: fat,
+          baseCalories: calories,
+          baseProtein: protein,
+          baseCarbs: carbs,
+          baseFat: fat,
+        ),
+      );
+    }
+
     return right(
       Food(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -567,11 +721,15 @@ Guidelines:
         baseCarbs: carbs,
         baseFat: fat,
         nonFoodMessage: null,
+        ingredients: parsedIngredients,
       ),
     );
   }
 
-  Future<Either<Failure, Food>> detectFoodAndCalories(File imageFile) async {
+  Future<Either<Failure, Food>> detectFoodAndCalories(
+    File imageFile, {
+    String? userHint,
+  }) async {
     String apiKey = '';
     try {
       if (!imageFile.existsSync()) {
@@ -625,6 +783,7 @@ Guidelines:
             apiKey: apiKey,
             base64Image: base64Image,
             mimeType: mimeType,
+            userHint: userHint,
             timeout: attemptTimeout,
           );
         } on TimeoutException catch (e) {
@@ -678,6 +837,7 @@ Guidelines:
                 apiKey: apiKey,
                 base64Image: base64Image,
                 mimeType: mimeType,
+                userHint: userHint,
                 timeout: retryRemaining < perAttemptTimeout
                     ? retryRemaining
                     : perAttemptTimeout,
@@ -795,6 +955,117 @@ Guidelines:
       return left(NetworkFailure(noConnectionErrorMessage, cause: e));
     } catch (e) {
       _logSafe('Unexpected exception in detectFoodAndCalories: $e', apiKey);
+      return left(NetworkFailure(invalidResponseErrorMessage, cause: e));
+    }
+  }
+
+  Future<Either<Failure, Food>> estimateFoodFromText(String description) async {
+    String apiKey = '';
+    try {
+      final trimmed = description.trim();
+      if (trimmed.isEmpty) {
+        return left(const NetworkFailure('Please describe a food or meal.'));
+      }
+
+      final resolvedKey = await _resolveApiKey();
+      if (resolvedKey == null || resolvedKey.isEmpty) {
+        return left(const NetworkFailure(missingApiKeyErrorMessage));
+      }
+      apiKey = resolvedKey;
+
+      final stopwatch = Stopwatch()..start();
+      final modelsQueue = List<String>.from(candidateModels);
+      final triedModels = <String>{};
+      int? lastStatusCode;
+      String? lastResponseBody;
+
+      var index = 0;
+      while (index < modelsQueue.length) {
+        final remaining = totalOperationTimeout - stopwatch.elapsed;
+        if (remaining <= const Duration(seconds: 2)) break;
+
+        final model = modelsQueue[index];
+        index++;
+        triedModels.add(model);
+
+        final attemptTimeout = remaining < perAttemptTimeout
+            ? remaining
+            : perAttemptTimeout;
+
+        http.Response response;
+        try {
+          response = await _sendTextContentRequest(
+            model: model,
+            apiKey: apiKey,
+            description: trimmed,
+            timeout: attemptTimeout,
+          );
+        } on TimeoutException {
+          if (triedModels.length < 2 && index < modelsQueue.length) continue;
+          return left(const NetworkFailure(timeoutErrorMessage));
+        } on SocketException catch (e) {
+          return left(NetworkFailure(noConnectionErrorMessage, cause: e));
+        } on http.ClientException catch (e) {
+          return left(NetworkFailure(noConnectionErrorMessage, cause: e));
+        }
+
+        lastStatusCode = response.statusCode;
+        lastResponseBody = response.body;
+
+        if (response.statusCode == 200) {
+          return _parseGeminiResponse(response.body, apiKey);
+        }
+
+        if (_isInvalidApiKeyError(response.statusCode, response.body)) {
+          return left(
+            NetworkFailure(invalidApiKeyErrorMessage, cause: response.body),
+          );
+        }
+
+        if (_isUnsupportedParameterError(response.statusCode, response.body)) {
+          try {
+            final plainResponse = await _sendTextContentRequest(
+              model: model,
+              apiKey: apiKey,
+              description: trimmed,
+              timeout: attemptTimeout,
+              includeThinkingConfig: false,
+            );
+            lastStatusCode = plainResponse.statusCode;
+            lastResponseBody = plainResponse.body;
+            if (plainResponse.statusCode == 200) {
+              return _parseGeminiResponse(plainResponse.body, apiKey);
+            }
+          } catch (_) {}
+        }
+
+        if (_isModelNotAvailableError(lastStatusCode, lastResponseBody)) {
+          continue;
+        }
+
+        if (lastStatusCode == 429 ||
+            lastStatusCode == 500 ||
+            lastStatusCode == 502 ||
+            lastStatusCode == 503 ||
+            lastStatusCode == 504) {
+          if (triedModels.length >= 2) break;
+          await _delay(retryBaseDelay * triedModels.length);
+          continue;
+        }
+
+        break;
+      }
+
+      if (lastStatusCode == 429) {
+        return left(
+          NetworkFailure(highDemandErrorMessage, cause: lastResponseBody),
+        );
+      }
+
+      return left(
+        NetworkFailure(invalidResponseErrorMessage, cause: lastResponseBody),
+      );
+    } catch (e) {
       return left(NetworkFailure(invalidResponseErrorMessage, cause: e));
     }
   }

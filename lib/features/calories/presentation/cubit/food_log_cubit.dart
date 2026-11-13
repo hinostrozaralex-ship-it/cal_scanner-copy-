@@ -103,7 +103,7 @@ class FoodLogCubit extends Cubit<FoodLogState> {
     );
   }
 
-  Future<void> addMealFromImage(File image) async {
+  Future<void> addMealFromImage(File image, {String? userHint}) async {
     emit(
       state.copyWith(
         isScanning: true,
@@ -112,7 +112,7 @@ class FoodLogCubit extends Cubit<FoodLogState> {
         clearError: true,
       ),
     );
-    final result = await _detectFoodFromImage(image);
+    final result = await _detectFoodFromImage(image, userHint: userHint);
     await result.fold(
       (failure) async {
         emit(

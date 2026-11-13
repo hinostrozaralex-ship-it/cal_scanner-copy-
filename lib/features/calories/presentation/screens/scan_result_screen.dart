@@ -7,6 +7,7 @@ import 'package:cal_scanner/core/extensions/context_extension.dart';
 import 'package:cal_scanner/core/extensions/num_extension.dart';
 import 'package:cal_scanner/core/extensions/widget_extension.dart';
 import 'package:cal_scanner/features/calories/presentation/widgets/macros_card.dart';
+import 'package:cal_scanner/features/calories/presentation/widgets/meal_ingredients_editor.dart';
 import 'package:cal_scanner/theme/app_colors.dart';
 import 'package:cal_scanner/theme/app_typography.dart';
 import 'package:flutter/cupertino.dart';
@@ -31,6 +32,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   bool _dialogShown = false;
   late File _currentImageFile;
   Food? _meal;
+  List<FoodIngredient> _ingredients = [];
   String? _error;
   bool _scanStarted = false;
   bool _isLogging = false;
@@ -38,6 +40,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   final TextEditingController _quantityController = TextEditingController(
     text: '100',
   );
+  final TextEditingController _hintController = TextEditingController();
 
   void _showDialog(BuildContext context) {
     _dialogShown = true;
@@ -57,7 +60,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
             ),
             SizedBox(height: 6),
             Text(
-              'Identifying dish & estimating nutrition',
+              'Identifying dish, ingredients & estimating nutrition',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -96,24 +99,77 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   void _adjustQuantity(double delta, Food meal) {
     final step = _stepForMeal(meal);
     final minVal = step >= 10.0 ? 5.0 : 0.5;
+    final prevQty = _currentQuantity > 0 ? _currentQuantity : 100.0;
     final updated = (_currentQuantity + delta).clamp(minVal, 10000.0);
+    final scaleFactor = updated / prevQty;
+
     setState(() {
       _currentQuantity = updated;
       _quantityController.text = _formatQuantity(updated);
       _quantityController.selection = TextSelection.fromPosition(
         TextPosition(offset: _quantityController.text.length),
       );
+      if (_ingredients.isNotEmpty) {
+        _ingredients = _ingredients
+            .map((ing) => ing.withQuantity(ing.quantity * scaleFactor))
+            .toList();
+      }
     });
   }
 
   void _onQuantityTextChanged(String text) {
     final normalized = text.trim().replaceAll(',', '.');
     final parsed = double.tryParse(normalized);
-    if (parsed != null && parsed >= 0) {
+    if (parsed != null && parsed > 0) {
+      final prevQty = _currentQuantity > 0 ? _currentQuantity : 100.0;
+      final scaleFactor = parsed / prevQty;
       setState(() {
         _currentQuantity = parsed;
+        if (_ingredients.isNotEmpty) {
+          _ingredients = _ingredients
+              .map((ing) => ing.withQuantity(ing.quantity * scaleFactor))
+              .toList();
+        }
       });
     }
+  }
+
+  void _onIngredientsChanged(List<FoodIngredient> updatedIngredients) {
+    setState(() {
+      _ingredients = updatedIngredients;
+      if (_ingredients.isNotEmpty) {
+        final totalQty = _ingredients.fold<double>(
+          0.0,
+          (sum, item) => sum + item.quantity,
+        );
+        if (totalQty > 0) {
+          _currentQuantity = totalQty;
+          _quantityController.text = _formatQuantity(totalQty);
+        }
+      }
+    });
+  }
+
+  void _handleReanalyzeWithHint() {
+    final hint = _hintController.text.trim();
+    if (hint.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please write a hint for the AI (e.g. "Arroz con pollo y media palta").',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.kWhite),
+          ),
+          backgroundColor: AppColors.kBlack,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    context.read<FoodLogCubit>().addMealFromImage(
+          _currentImageFile,
+          userHint: hint,
+        );
   }
 
   Future<void> _handleTryAgain() async {
@@ -131,6 +187,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         setState(() {
           _currentImageFile = newFile;
           _meal = null;
+          _ingredients = [];
           _error = null;
         });
         context.read<FoodLogCubit>().addMealFromImage(newFile);
@@ -144,6 +201,38 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     }
   }
 
+  double _calculatedCalories(Food meal) {
+    if (_ingredients.isNotEmpty) {
+      return _ingredients.fold(0.0, (sum, i) => sum + i.calories);
+    }
+    final baseServingSize = meal.servingSize > 0 ? meal.servingSize : 100.0;
+    return meal.baseCalories * (_currentQuantity / baseServingSize);
+  }
+
+  double _calculatedProtein(Food meal) {
+    if (_ingredients.isNotEmpty) {
+      return _ingredients.fold(0.0, (sum, i) => sum + i.protein);
+    }
+    final baseServingSize = meal.servingSize > 0 ? meal.servingSize : 100.0;
+    return meal.baseProtein * (_currentQuantity / baseServingSize);
+  }
+
+  double _calculatedCarbs(Food meal) {
+    if (_ingredients.isNotEmpty) {
+      return _ingredients.fold(0.0, (sum, i) => sum + i.carbs);
+    }
+    final baseServingSize = meal.servingSize > 0 ? meal.servingSize : 100.0;
+    return meal.baseCarbs * (_currentQuantity / baseServingSize);
+  }
+
+  double _calculatedFat(Food meal) {
+    if (_ingredients.isNotEmpty) {
+      return _ingredients.fold(0.0, (sum, i) => sum + i.fat);
+    }
+    final baseServingSize = meal.servingSize > 0 ? meal.servingSize : 100.0;
+    return meal.baseFat * (_currentQuantity / baseServingSize);
+  }
+
   Future<void> _handleLogMeal() async {
     final meal = _meal;
     if (meal == null || _isLogging) return;
@@ -152,15 +241,23 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       _isLogging = true;
     });
 
-    final baseServingSize = meal.servingSize > 0 ? meal.servingSize : 100.0;
-    final ratio = _currentQuantity / baseServingSize;
+    final totalCal = _calculatedCalories(meal);
+    final totalProt = _calculatedProtein(meal);
+    final totalCarbs = _calculatedCarbs(meal);
+    final totalFat = _calculatedFat(meal);
 
     final loggedMeal = meal.copyWith(
       quantity: _currentQuantity,
-      calories: meal.baseCalories * ratio,
-      protein: meal.baseProtein * ratio,
-      carbs: meal.baseCarbs * ratio,
-      fat: meal.baseFat * ratio,
+      servingSize: _currentQuantity > 0 ? _currentQuantity : meal.servingSize,
+      calories: totalCal,
+      protein: totalProt,
+      carbs: totalCarbs,
+      fat: totalFat,
+      baseCalories: totalCal,
+      baseProtein: totalProt,
+      baseCarbs: totalCarbs,
+      baseFat: totalFat,
+      ingredients: _ingredients,
     );
 
     final cubit = context.read<FoodLogCubit>();
@@ -208,6 +305,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   @override
   void dispose() {
     _quantityController.dispose();
+    _hintController.dispose();
     if (_dialogShown) {
       try {
         Navigator.of(context, rootNavigator: true).pop();
@@ -233,6 +331,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                 detected.servingSize > 0 ? detected.servingSize : 100.0;
             setState(() {
               _meal = detected;
+              _ingredients = List<FoodIngredient>.from(detected.ingredients);
               _currentQuantity = initialQty;
               _quantityController.text = _formatQuantity(initialQty);
               _error = null;
@@ -249,13 +348,10 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       },
       builder: (context, state) {
         final meal = _meal;
-        final baseServingSize =
-            (meal != null && meal.servingSize > 0) ? meal.servingSize : 100.0;
-        final ratio = meal != null ? (_currentQuantity / baseServingSize) : 1.0;
-        final calcCalories = meal != null ? (meal.baseCalories * ratio) : 0.0;
-        final calcProtein = meal != null ? (meal.baseProtein * ratio) : 0.0;
-        final calcCarbs = meal != null ? (meal.baseCarbs * ratio) : 0.0;
-        final calcFat = meal != null ? (meal.baseFat * ratio) : 0.0;
+        final calcCalories = meal != null ? _calculatedCalories(meal) : 0.0;
+        final calcProtein = meal != null ? _calculatedProtein(meal) : 0.0;
+        final calcCarbs = meal != null ? _calculatedCarbs(meal) : 0.0;
+        final calcFat = meal != null ? _calculatedFat(meal) : 0.0;
 
         return Scaffold(
           backgroundColor: context.colors.surface,
@@ -384,9 +480,14 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                               ],
                             ),
                           ),
-                          SizedBox(height: 32.h),
+                          SizedBox(height: 18.h),
+                          _AiRefineHintCard(
+                            controller: _hintController,
+                            onReanalyze: _handleReanalyzeWithHint,
+                          ),
+                          SizedBox(height: 20.h),
                           AppButton(
-                            text: 'Try Again',
+                            text: 'Try Another Photo',
                             onTap: _handleTryAgain,
                           ),
                         ],
@@ -406,13 +507,13 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                               child: _currentImageFile.existsSync()
                                   ? Image.file(
                                       _currentImageFile,
-                                      height: 140.h,
-                                      width: 125.w,
+                                      height: 130.h,
+                                      width: 120.w,
                                       fit: BoxFit.cover,
                                     )
                                   : Container(
-                                      height: 140.h,
-                                      width: 125.w,
+                                      height: 130.h,
+                                      width: 120.w,
                                       color: AppColors.kPrimaryGrey,
                                       child: const Icon(
                                         Icons.fastfood_outlined,
@@ -421,7 +522,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                     ),
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Text(
@@ -433,11 +534,11 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                               ),
                             ),
                           ),
-                          20.kH,
+                          14.kH,
                           Text(
                             calcCalories.toStringAsFixed(0),
                             style: const TextStyle(
-                              fontSize: 60,
+                              fontSize: 56,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFFFF8C00),
                               height: 1,
@@ -447,15 +548,35 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                             'calories',
                             style: TextStyle(color: Colors.black54),
                           ),
-                          const SizedBox(height: 22),
+                          const SizedBox(height: 18),
                           _FoodMacros(
                             protein: calcProtein,
                             carbs: calcCarbs,
                             fat: calcFat,
                           ),
-                          const SizedBox(height: 22),
+                          const SizedBox(height: 16),
 
-                          // Interactive Portion Selector
+                          // AI Suggestion / Refine Card
+                          Padding(
+                            padding: pagePadding,
+                            child: _AiRefineHintCard(
+                              controller: _hintController,
+                              onReanalyze: _handleReanalyzeWithHint,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Ingredients Breakdown & Editor
+                          Padding(
+                            padding: pagePadding,
+                            child: MealIngredientsEditor(
+                              ingredients: _ingredients,
+                              onIngredientsChanged: _onIngredientsChanged,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Interactive Total Portion Selector
                           Padding(
                             padding: pagePadding,
                             child: Container(
@@ -473,9 +594,9 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                               child: Column(
                                 children: [
                                   Text(
-                                    'Serving Portion (Base: ${_formatQuantity(meal.servingSize)} ${meal.servingUnit})',
+                                    'Total Meal Weight / Portion (Scales all items)',
                                     style: AppTypography.bodySmall.copyWith(
-                                      fontSize: 12.5.sp,
+                                      fontSize: 12.sp,
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.kBlack.withValues(
                                         alpha: 0.65,
@@ -551,7 +672,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 22),
                           Padding(
                             padding: pagePadding,
                             child: AppButton(
@@ -560,48 +681,6 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                             ),
                           ),
                           const SizedBox(height: 20),
-                          Padding(
-                            padding: pagePadding * 2,
-                            child: RichText(
-                              textAlign: TextAlign.center,
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: '~  ',
-                                    style: AppTypography.bodyLarge.copyWith(
-                                      color: Colors.orange,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: 'Values are ',
-                                    style: AppTypography.headlineSmall.copyWith(
-                                      color: context.colors.onSurface,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: 'AI-powered estimates  ',
-                                    style: AppTypography.headlineSmall.copyWith(
-                                      color: Colors.grey[600],
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text:
-                                        '\n& closely reflect real nutrition data.',
-                                    style: AppTypography.bodySmall.copyWith(
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: '  ~',
-                                    style: AppTypography.bodyLarge.copyWith(
-                                      color: Colors.orange,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -612,6 +691,108 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _AiRefineHintCard extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback onReanalyze;
+
+  const _AiRefineHintCard({
+    required this.controller,
+    required this.onReanalyze,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(14.w),
+      decoration: BoxDecoration(
+        color: AppColors.kWhite,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(
+          color: AppColors.kOrange.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.auto_awesome,
+                size: 17.sp,
+                color: AppColors.kOrange,
+              ),
+              SizedBox(width: 6.w),
+              Text(
+                'Wrong or missing items? Give AI a hint',
+                style: AppTypography.titleSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.kBlack,
+                  fontSize: 13.sp,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  style: AppTypography.bodySmall.copyWith(
+                    fontSize: 13.sp,
+                    color: AppColors.kBlack,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. Es arroz con pollo y lleva media palta',
+                    hintStyle: AppTypography.bodySmall.copyWith(
+                      fontSize: 12.sp,
+                      color: AppColors.kBlack.withValues(alpha: 0.45),
+                    ),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12.w,
+                      vertical: 10.h,
+                    ),
+                    filled: true,
+                    fillColor: AppColors.kScaffold,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 8.w),
+              ElevatedButton(
+                onPressed: onReanalyze,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.kOrange,
+                  foregroundColor: AppColors.kWhite,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 12.w,
+                    vertical: 10.h,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                ),
+                child: Text(
+                  'Refine',
+                  style: AppTypography.titleSmall.copyWith(
+                    color: AppColors.kWhite,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5.sp,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -677,13 +858,13 @@ class _FoodMacros extends StatelessWidget {
                 label: 'Protein',
                 color: const Color(0xFF4A90D9),
               ),
-              VerticalDivider(),
+              const VerticalDivider(),
               MacroItem(
                 value: '${carbs.round()}g',
                 label: 'Carbs',
                 color: const Color(0xFFF5A623),
               ),
-              VerticalDivider(),
+              const VerticalDivider(),
               MacroItem(
                 value: '${fat.round()}g',
                 label: 'Fat',

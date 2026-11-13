@@ -20,6 +20,7 @@ class MealRecord {
   final double baseCarbs;
   final double baseFat;
   final String? nonFoodMessage;
+  final List<FoodIngredient> ingredients;
 
   const MealRecord({
     required this.id,
@@ -39,6 +40,7 @@ class MealRecord {
     double? baseCarbs,
     double? baseFat,
     this.nonFoodMessage,
+    this.ingredients = const [],
   }) : servingSize = servingSize ?? (quantity > 0 ? quantity : 100.0),
        baseCalories = baseCalories ?? calories,
        baseProtein = baseProtein ?? protein,
@@ -63,6 +65,7 @@ class MealRecord {
     double? baseCarbs,
     double? baseFat,
     String? nonFoodMessage,
+    List<FoodIngredient>? ingredients,
   }) {
     return MealRecord(
       id: id ?? this.id,
@@ -82,6 +85,7 @@ class MealRecord {
       baseCarbs: baseCarbs ?? this.baseCarbs,
       baseFat: baseFat ?? this.baseFat,
       nonFoodMessage: nonFoodMessage ?? this.nonFoodMessage,
+      ingredients: ingredients ?? this.ingredients,
     );
   }
 
@@ -104,6 +108,7 @@ class MealRecord {
       'baseCarbs': baseCarbs,
       'baseFat': baseFat,
       if (nonFoodMessage != null) 'nonFoodMessage': nonFoodMessage,
+      'ingredients': ingredients.map((e) => e.toMap()).toList(),
     };
   }
 
@@ -117,6 +122,14 @@ class MealRecord {
         (map['servingSize'] as num?)?.toDouble() ??
         (map['serving_size'] as num?)?.toDouble() ??
         (quantity > 0 ? quantity : 100.0);
+
+    final rawIngredients = map['ingredients'];
+    final ingredients = rawIngredients is List
+        ? rawIngredients
+              .whereType<Map>()
+              .map((m) => FoodIngredient.fromMap(Map<String, dynamic>.from(m)))
+              .toList()
+        : const <FoodIngredient>[];
 
     return MealRecord(
       id: (map['id'] as String?) ?? '',
@@ -140,6 +153,7 @@ class MealRecord {
       baseFat: (map['baseFat'] as num?)?.toDouble() ?? fat,
       nonFoodMessage:
           (map['nonFoodMessage'] ?? map['non_food_message']) as String?,
+      ingredients: ingredients,
     );
   }
 
@@ -176,6 +190,7 @@ class MealRecord {
       baseCarbs: baseCarbs,
       baseFat: baseFat,
       nonFoodMessage: nonFoodMessage,
+      ingredients: ingredients,
     );
   }
 
@@ -198,6 +213,7 @@ class MealRecord {
       baseCarbs: food.baseCarbs,
       baseFat: food.baseFat,
       nonFoodMessage: food.nonFoodMessage,
+      ingredients: food.ingredients,
     );
   }
 }

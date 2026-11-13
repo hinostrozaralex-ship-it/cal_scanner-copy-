@@ -6,6 +6,7 @@ import 'package:cal_scanner/core/extensions/context_extension.dart';
 import 'package:cal_scanner/core/extensions/widget_extension.dart';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_cubit.dart';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_state.dart';
+import 'package:cal_scanner/features/calories/presentation/screens/manual_meal_screen.dart';
 import 'package:cal_scanner/features/calories/presentation/screens/scan_result_screen.dart';
 import 'package:cal_scanner/features/calories/presentation/screens/settings_screen.dart';
 import 'package:cal_scanner/features/calories/presentation/widgets/weekly_date_picker.dart';
@@ -28,6 +29,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _profileRefreshTick = 0;
+  bool _isFabOpen = false;
 
   Future<void> _pickAndScanImage(
     BuildContext context,
@@ -49,6 +51,18 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => BlocProvider.value(
           value: context.read<FoodLogCubit>(),
           child: ScanResultScreen(imageFile: file),
+        ),
+      ),
+    );
+  }
+
+  void _openManualEntryScreen(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlocProvider.value(
+          value: context.read<FoodLogCubit>(),
+          child: const ManualMealScreen(),
         ),
       ),
     );
@@ -187,71 +201,196 @@ class _HomeScreenState extends State<HomeScreen> {
           SizedBox(width: 8.w),
         ],
       ),
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              BlocBuilder<FoodLogCubit, FoodLogState>(
-                builder: (context, state) {
-                  return WeekDatePicker(
-                    selectedDate: state.selectedDate,
-                    onDateSelected: (date) {
-                      context.read<FoodLogCubit>().selectDate(date);
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  BlocBuilder<FoodLogCubit, FoodLogState>(
+                    builder: (context, state) {
+                      return WeekDatePicker(
+                        selectedDate: state.selectedDate,
+                        onDateSelected: (date) {
+                          context.read<FoodLogCubit>().selectDate(date);
+                        },
+                      );
                     },
-                  );
-                },
-              ),
-
-              BlocBuilder<FoodLogCubit, FoodLogState>(
-                builder: (context, state) {
-                  if (state.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      DailyTracker(
-                        key: ValueKey(_profileRefreshTick),
-                        calories: state.totalCalories,
-                        protein: state.totalProtein,
-                        carbs: state.totalCarbs,
-                        fat: state.totalFat,
-                      ),
-                      SizedBox(height: 30.h),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  ),
+                  BlocBuilder<FoodLogCubit, FoodLogState>(
+                    builder: (context, state) {
+                      if (state.isLoading) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Meals',
-                            style: Theme.of(context).textTheme.titleMedium,
+                          const SizedBox(height: 24),
+                          DailyTracker(
+                            key: ValueKey(_profileRefreshTick),
+                            calories: state.totalCalories,
+                            protein: state.totalProtein,
+                            carbs: state.totalCarbs,
+                            fat: state.totalFat,
                           ),
-                          Text(
-                            '${state.meals.length} items',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
+                          SizedBox(height: 30.h),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Meals',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              Text(
+                                '${state.meals.length} items',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ],
+                          ).paddingSymmetric(horizontal: 20.w),
+                          const SizedBox(height: 16),
+                          MealList(meals: state.meals),
                         ],
-                      ).paddingSymmetric(horizontal: 20.w),
-                      const SizedBox(height: 16),
-                      MealList(meals: state.meals),
-                    ],
-                  );
-                },
+                      );
+                    },
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+
+          // Scrim overlay when FAB menu is open
+          if (_isFabOpen)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => setState(() => _isFabOpen = false),
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.25),
+                ),
+              ),
+            ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.kOrange,
-        onPressed: () => _showImageSourceSelector(context),
-        child: Icon(
-          CupertinoIcons.camera_viewfinder,
-          size: 30.sp,
-          color: context.colors.onPrimary,
-        ),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (_isFabOpen) ...[
+            _FabBubbleOption(
+              label: 'Scan Food',
+              icon: CupertinoIcons.camera_viewfinder,
+              backgroundColor: AppColors.kOrange,
+              iconColor: AppColors.kWhite,
+              onTap: () {
+                setState(() => _isFabOpen = false);
+                _showImageSourceSelector(context);
+              },
+            ),
+            SizedBox(height: 12.h),
+            _FabBubbleOption(
+              label: 'Manual Entry',
+              icon: Icons.edit_note_rounded,
+              backgroundColor: AppColors.kBlack,
+              iconColor: AppColors.kWhite,
+              onTap: () {
+                setState(() => _isFabOpen = false);
+                _openManualEntryScreen(context);
+              },
+            ),
+            SizedBox(height: 14.h),
+          ],
+          FloatingActionButton(
+            backgroundColor: _isFabOpen ? AppColors.kBlack : AppColors.kOrange,
+            onPressed: () {
+              setState(() {
+                _isFabOpen = !_isFabOpen;
+              });
+            },
+            child: AnimatedRotation(
+              turns: _isFabOpen ? 0.125 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                Icons.add_rounded,
+                size: 32.sp,
+                color: context.colors.onPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FabBubbleOption extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color backgroundColor;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  const _FabBubbleOption({
+    required this.label,
+    required this.icon,
+    required this.backgroundColor,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 7.h),
+            decoration: BoxDecoration(
+              color: AppColors.kWhite,
+              borderRadius: BorderRadius.circular(14.r),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Text(
+              label,
+              style: AppTypography.titleSmall.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.kBlack,
+                fontSize: 13.sp,
+              ),
+            ),
+          ),
+          SizedBox(width: 10.w),
+          Container(
+            width: 48.w,
+            height: 48.w,
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(
+              icon,
+              color: iconColor,
+              size: 24.sp,
+            ),
+          ),
+        ],
       ),
     );
   }

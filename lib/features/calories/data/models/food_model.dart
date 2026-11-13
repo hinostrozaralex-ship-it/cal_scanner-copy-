@@ -18,6 +18,7 @@ class FoodModel {
   final double baseCarbs;
   final double baseFat;
   final String? nonFoodMessage;
+  final List<FoodIngredient> ingredients;
 
   const FoodModel({
     required this.id,
@@ -37,6 +38,7 @@ class FoodModel {
     double? baseCarbs,
     double? baseFat,
     this.nonFoodMessage,
+    this.ingredients = const [],
   }) : servingSize = servingSize ?? (quantity > 0 ? quantity : 100.0),
        baseCalories = baseCalories ?? calories,
        baseProtein = baseProtein ?? protein,
@@ -53,6 +55,14 @@ class FoodModel {
         (json['servingSize'] as num?)?.toDouble() ??
         (json['serving_size'] as num?)?.toDouble() ??
         (quantity > 0 ? quantity : 100.0);
+
+    final rawIngredients = json['ingredients'];
+    final ingredients = rawIngredients is List
+        ? rawIngredients
+              .whereType<Map>()
+              .map((m) => FoodIngredient.fromMap(Map<String, dynamic>.from(m)))
+              .toList()
+        : const <FoodIngredient>[];
 
     return FoodModel(
       id: (json['id'] as String?) ?? '',
@@ -74,6 +84,7 @@ class FoodModel {
       baseFat: (json['baseFat'] as num?)?.toDouble() ?? fat,
       nonFoodMessage:
           (json['nonFoodMessage'] ?? json['non_food_message']) as String?,
+      ingredients: ingredients,
     );
   }
 
@@ -96,6 +107,7 @@ class FoodModel {
       'baseCarbs': baseCarbs,
       'baseFat': baseFat,
       'nonFoodMessage': nonFoodMessage,
+      'ingredients': ingredients.map((e) => e.toMap()).toList(),
     };
   }
 
@@ -118,6 +130,7 @@ class FoodModel {
       baseCarbs: baseCarbs,
       baseFat: baseFat,
       nonFoodMessage: nonFoodMessage,
+      ingredients: ingredients,
     );
   }
 
@@ -140,6 +153,7 @@ class FoodModel {
       baseCarbs: food.baseCarbs,
       baseFat: food.baseFat,
       nonFoodMessage: food.nonFoodMessage,
+      ingredients: food.ingredients,
     );
   }
 }
