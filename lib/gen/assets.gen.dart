@@ -14,9 +14,6 @@ import 'package:flutter/widgets.dart';
 class $AssetsImagesGen {
   const $AssetsImagesGen();
 
-  /// File path: assets/images/logo.png
-  AssetGenImage get logo => const AssetGenImage('assets/images/logo.png');
-
   /// File path: assets/images/splash.png
   AssetGenImage get splash => const AssetGenImage('assets/images/splash.png');
 
@@ -24,55 +21,7 @@ class $AssetsImagesGen {
   AssetGenImage get tray => const AssetGenImage('assets/images/tray.png');
 
   /// List of all assets
-  List<AssetGenImage> get values => [logo, splash, tray];
-}
-
-class $AssetsOnboardingGen {
-  const $AssetsOnboardingGen();
-
-  /// File path: assets/onboarding/onboarding_activity_level.png
-  AssetGenImage get onboardingActivityLevel =>
-      const AssetGenImage('assets/onboarding/onboarding_activity_level.png');
-
-  /// File path: assets/onboarding/onboarding_age.png
-  AssetGenImage get onboardingAge =>
-      const AssetGenImage('assets/onboarding/onboarding_age.png');
-
-  /// File path: assets/onboarding/onboarding_estimated_cal.png
-  AssetGenImage get onboardingEstimatedCal =>
-      const AssetGenImage('assets/onboarding/onboarding_estimated_cal.png');
-
-  /// File path: assets/onboarding/onboarding_gender.png
-  AssetGenImage get onboardingGender =>
-      const AssetGenImage('assets/onboarding/onboarding_gender.png');
-
-  /// File path: assets/onboarding/onboarding_goal.png
-  AssetGenImage get onboardingGoal =>
-      const AssetGenImage('assets/onboarding/onboarding_goal.png');
-
-  /// File path: assets/onboarding/onboarding_height.png
-  AssetGenImage get onboardingHeight =>
-      const AssetGenImage('assets/onboarding/onboarding_height.png');
-
-  /// File path: assets/onboarding/onboarding_weight.png
-  AssetGenImage get onboardingWeight =>
-      const AssetGenImage('assets/onboarding/onboarding_weight.png');
-
-  /// File path: assets/onboarding/onboarding_welcome.png
-  AssetGenImage get onboardingWelcome =>
-      const AssetGenImage('assets/onboarding/onboarding_welcome.png');
-
-  /// List of all assets
-  List<AssetGenImage> get values => [
-    onboardingActivityLevel,
-    onboardingAge,
-    onboardingEstimatedCal,
-    onboardingGender,
-    onboardingGoal,
-    onboardingHeight,
-    onboardingWeight,
-    onboardingWelcome,
-  ];
+  List<AssetGenImage> get values => [splash, tray];
 }
 
 class Assets {
@@ -80,7 +29,6 @@ class Assets {
 
   static const String aEnv = '.env';
   static const $AssetsImagesGen images = $AssetsImagesGen();
-  static const $AssetsOnboardingGen onboarding = $AssetsOnboardingGen();
 
   /// List of all assets
   static List<String> get values => [aEnv];

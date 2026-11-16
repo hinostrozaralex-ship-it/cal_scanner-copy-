@@ -7,10 +7,7 @@ import 'package:cal_scanner/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../onboarding/data/local/preference_manager.dart';
-import '../../../onboarding/data/models/user_data.dart';
 import 'macro_indicator.dart';
 
 class DailyTracker extends StatefulWidget {
@@ -32,7 +29,6 @@ class DailyTracker extends StatefulWidget {
 }
 
 class _DailyTrackerState extends State<DailyTracker> {
-  UserData? userData;
   UserProfile? userProfile;
 
   @override
@@ -42,10 +38,6 @@ class _DailyTrackerState extends State<DailyTracker> {
   }
 
   Future<void> _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final prefManager = PreferenceManager(prefs);
-    userData = prefManager.getUserData();
-
     if (sl.isRegistered<LocalStorageService>()) {
       userProfile = await sl<LocalStorageService>().getUserProfile();
     }
@@ -95,14 +87,10 @@ class _DailyTrackerState extends State<DailyTracker> {
   @override
   Widget build(BuildContext context) {
     final plan = _profilePlanFallback();
-    final targetCalories =
-        (plan?['targetCalories'] ?? userData?.estimatedCalories ?? 2000)
-            .toDouble();
-    final proteinGoal =
-        (plan?['proteinGoal'] ?? userData?.proteinGoal ?? 125).toDouble();
-    final carbsGoal =
-        (plan?['carbsGoal'] ?? userData?.carbsGoal ?? 250).toDouble();
-    final fatGoal = (plan?['fatGoal'] ?? userData?.fatGoal ?? 55).toDouble();
+    final targetCalories = (plan?['targetCalories'] ?? 2000).toDouble();
+    final proteinGoal = (plan?['proteinGoal'] ?? 125).toDouble();
+    final carbsGoal = (plan?['carbsGoal'] ?? 250).toDouble();
+    final fatGoal = (plan?['fatGoal'] ?? 55).toDouble();
     final unitSummary = _formattedUnitSummary();
 
     return Column(

@@ -173,7 +173,7 @@ class BounceState extends State<Bounce> with SingleTickerProviderStateMixin {
         onTapUp?.call(details);
       } else {
         Future.delayed(
-            widget.tapDelay - _lastTapTime!.difference(DateTime.now()), () {
+            Duration(milliseconds: widget.tapDelay.inMilliseconds - msSinceTapDown), () {
           onTap?.call();
           onTapUp?.call(details);
         });
@@ -224,7 +224,7 @@ class WidgetSizeRenderObject extends RenderProxyBox {
       }
     } catch (e) {
       if (kDebugMode) {
-        print(e);
+        debugPrint('$e');
       }
     }
   }

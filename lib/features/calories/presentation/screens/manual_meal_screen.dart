@@ -260,11 +260,13 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
                           size: 19.sp,
                         ),
                         SizedBox(width: 6.w),
-                        Text(
-                          'Describe Meal with AI (Optional)',
-                          style: AppTypography.titleMedium.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.kBlack,
+                        Expanded(
+                          child: Text(
+                            'Describe Meal with AI (Optional)',
+                            style: AppTypography.titleMedium.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.kBlack,
+                            ),
                           ),
                         ),
                       ],
@@ -462,37 +464,45 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      SizedBox(height: 10.h),
+                      SizedBox(height: 12.h),
                       Row(
                         children: [
                           Expanded(
                             child: _DirectMacroInput(
                               controller: _manualCaloriesController,
                               label: 'Calories',
+                              suffix: 'kcal',
                               onChanged: (_) => setState(() {}),
                             ),
                           ),
-                          SizedBox(width: 8.w),
+                          SizedBox(width: 12.w),
                           Expanded(
                             child: _DirectMacroInput(
                               controller: _manualProteinController,
-                              label: 'Protein (g)',
+                              label: 'Protein',
+                              suffix: 'g',
                               onChanged: (_) => setState(() {}),
                             ),
                           ),
-                          SizedBox(width: 8.w),
+                        ],
+                      ),
+                      SizedBox(height: 10.h),
+                      Row(
+                        children: [
                           Expanded(
                             child: _DirectMacroInput(
                               controller: _manualCarbsController,
-                              label: 'Carbs (g)',
+                              label: 'Carbs',
+                              suffix: 'g',
                               onChanged: (_) => setState(() {}),
                             ),
                           ),
-                          SizedBox(width: 8.w),
+                          SizedBox(width: 12.w),
                           Expanded(
                             child: _DirectMacroInput(
                               controller: _manualFatController,
-                              label: 'Fat (g)',
+                              label: 'Fat',
+                              suffix: 'g',
                               onChanged: (_) => setState(() {}),
                             ),
                           ),
@@ -520,34 +530,61 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
 class _DirectMacroInput extends StatelessWidget {
   final TextEditingController controller;
   final String label;
+  final String suffix;
   final ValueChanged<String> onChanged;
 
   const _DirectMacroInput({
     required this.controller,
     required this.label,
+    required this.suffix,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      textAlign: TextAlign.center,
-      onChanged: onChanged,
-      style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w700),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(fontSize: 10.5.sp),
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 10.h),
-        filled: true,
-        fillColor: AppColors.kScaffold,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide.none,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          ' $label',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.bodySmall.copyWith(
+            fontSize: 11.5.sp,
+            fontWeight: FontWeight.w600,
+            color: AppColors.kBlack.withValues(alpha: 0.7),
+          ),
         ),
-      ),
+        SizedBox(height: 4.h),
+        TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onChanged: onChanged,
+          style: AppTypography.titleSmall.copyWith(
+            fontWeight: FontWeight.w700,
+            fontSize: 14.sp,
+          ),
+          decoration: InputDecoration(
+            suffixText: suffix,
+            suffixStyle: AppTypography.bodySmall.copyWith(
+              fontSize: 11.5.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.kOrange,
+            ),
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12.w,
+              vertical: 11.h,
+            ),
+            filled: true,
+            fillColor: AppColors.kScaffold,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

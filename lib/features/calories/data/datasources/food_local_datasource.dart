@@ -46,15 +46,7 @@ class FoodLocalDataSource {
   }
 
   Future<void> setDailyFoodLog(DateTime date, List<FoodModel> items) async {
-    final key = _keyForDate(date);
-    if (items.isEmpty) {
-      await _prefs.remove(key);
-    } else {
-      await _prefs.setString(
-        key,
-        jsonEncode(items.map((e) => e.toJson()).toList()),
-      );
-    }
+    await _prefs.remove(_keyForDate(date));
 
     final existingForDate = await _localStorage.getMealsByDate(date);
     final newIds = items.map((e) => e.id).toSet();

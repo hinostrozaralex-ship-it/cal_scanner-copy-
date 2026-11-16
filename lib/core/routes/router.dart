@@ -1,5 +1,6 @@
 import 'package:cal_scanner/core/storage/local_storage_service.dart';
 import 'package:cal_scanner/features/calories/presentation/screens/home_screen.dart';
+import 'package:cal_scanner/features/calories/presentation/screens/progress_screen.dart';
 import 'package:cal_scanner/features/calories/presentation/screens/settings_screen.dart';
 import 'package:cal_scanner/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:cal_scanner/features/onboarding/presentation/screens/splash.dart';
@@ -9,10 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_routes.dart';
 
 class AppRouter {
-  final bool showOnboarding;
   final SharedPreferences prefs;
 
-  AppRouter({required this.showOnboarding, required this.prefs});
+  AppRouter({required this.prefs});
 
   late final GoRouter router = GoRouter(
     initialLocation: AppRoutes.splash,
@@ -31,6 +31,11 @@ class AppRouter {
         path: AppRoutes.main,
         name: AppRoutes.main,
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.progress,
+        name: AppRoutes.progress,
+        builder: (context, state) => const ProgressScreen(),
       ),
       GoRoute(
         path: AppRoutes.settings,

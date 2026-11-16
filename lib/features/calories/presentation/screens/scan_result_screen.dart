@@ -719,6 +719,7 @@ class _AiRefineHintCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Icon(
                 Icons.auto_awesome,
@@ -726,70 +727,73 @@ class _AiRefineHintCard extends StatelessWidget {
                 color: AppColors.kOrange,
               ),
               SizedBox(width: 6.w),
-              Text(
-                'Wrong or missing items? Give AI a hint',
-                style: AppTypography.titleSmall.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.kBlack,
-                  fontSize: 13.sp,
+              Expanded(
+                child: Text(
+                  'Wrong or missing items? Give AI a hint',
+                  style: AppTypography.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.kBlack,
+                    fontSize: 13.sp,
+                  ),
                 ),
               ),
             ],
           ),
           SizedBox(height: 8.h),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  style: AppTypography.bodySmall.copyWith(
-                    fontSize: 13.sp,
-                    color: AppColors.kBlack,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'e.g. Es arroz con pollo y lleva media palta',
-                    hintStyle: AppTypography.bodySmall.copyWith(
-                      fontSize: 12.sp,
-                      color: AppColors.kBlack.withValues(alpha: 0.45),
-                    ),
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12.w,
-                      vertical: 10.h,
-                    ),
-                    filled: true,
-                    fillColor: AppColors.kScaffold,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12.r),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+          TextField(
+            controller: controller,
+            minLines: 1,
+            maxLines: 2,
+            style: AppTypography.bodySmall.copyWith(
+              fontSize: 13.sp,
+              color: AppColors.kBlack,
+            ),
+            decoration: InputDecoration(
+              hintText: 'e.g. Es arroz con pollo y lleva media palta',
+              hintStyle: AppTypography.bodySmall.copyWith(
+                fontSize: 12.sp,
+                color: AppColors.kBlack.withValues(alpha: 0.45),
+              ),
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12.w,
+                vertical: 11.h,
+              ),
+              filled: true,
+              fillColor: AppColors.kScaffold,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12.r),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          SizedBox(height: 8.h),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onReanalyze,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.kOrange,
+                foregroundColor: AppColors.kWhite,
+                elevation: 0,
+                padding: EdgeInsets.symmetric(
+                  horizontal: 12.w,
+                  vertical: 10.h,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.r),
                 ),
               ),
-              SizedBox(width: 8.w),
-              ElevatedButton(
-                onPressed: onReanalyze,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.kOrange,
-                  foregroundColor: AppColors.kWhite,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 12.w,
-                    vertical: 10.h,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                ),
-                child: Text(
-                  'Refine',
-                  style: AppTypography.titleSmall.copyWith(
-                    color: AppColors.kWhite,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12.5.sp,
-                  ),
+              icon: Icon(Icons.bolt_rounded, size: 17.sp),
+              label: Text(
+                'Refine with AI',
+                style: AppTypography.titleSmall.copyWith(
+                  color: AppColors.kWhite,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5.sp,
                 ),
               ),
-            ],
+            ),
           ),
         ],
       ),

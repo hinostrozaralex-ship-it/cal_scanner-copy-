@@ -1,6 +1,7 @@
 import 'package:cal_scanner/core/extensions/context_extension.dart';
 import 'package:cal_scanner/core/extensions/num_extension.dart';
 import 'package:cal_scanner/core/extensions/widget_extension.dart';
+import 'package:cal_scanner/features/calories/presentation/screens/meal_detail_screen.dart';
 import 'package:cal_scanner/gen/assets.gen.dart';
 import 'package:cal_scanner/theme/app_colors.dart';
 import 'package:cal_scanner/theme/app_typography.dart';
@@ -23,6 +24,19 @@ class MealList extends StatelessWidget {
     return '$hour:$minute';
   }
 
+  void _openMealDetail(BuildContext context, Food meal) {
+    final cubit = context.read<FoodLogCubit>();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlocProvider.value(
+          value: cubit,
+          child: MealDetailScreen(meal: meal),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final sortedMeals = List.of(meals)
@@ -31,28 +45,30 @@ class MealList extends StatelessWidget {
     return meals.isEmpty
         ? Padding(
             padding: EdgeInsets.only(top: 24.h, bottom: 24.h),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  Assets.images.tray.path,
-                  height: 42.h,
-                  color: context.colors.onSurfaceVariant,
-                ),
-                15.kH,
-                Padding(
-                  padding: pagePadding,
-                  child: Text(
-                    'No meals logged for this day',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: context.colors.onSurfaceVariant,
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    Assets.images.tray.path,
+                    height: 42.h,
+                    color: context.colors.onSurfaceVariant,
+                  ),
+                  15.kH,
+                  Padding(
+                    padding: pagePadding,
+                    child: Text(
+                      'No meals logged for this day',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: context.colors.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ),
-                const Row(),
-              ],
+                ],
+              ),
             ),
           )
         : ListView.separated(
@@ -96,7 +112,7 @@ class MealList extends StatelessWidget {
                 child: MealListItem(
                   meal: meal,
                   timeFormatted: _formatHourMinute(meal.timestamp),
-                  onTap: () => showEditMealBottomSheet(context, meal),
+                  onTap: () => _openMealDetail(context, meal),
                   onDelete: () {
                     context.read<FoodLogCubit>().deleteMeal(meal);
                   },

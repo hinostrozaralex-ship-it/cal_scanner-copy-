@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/meal_record.dart';
 import '../models/user_profile.dart';
-import '../utils/calorie_calculator.dart';
 
 export '../models/meal_record.dart';
 export '../models/user_profile.dart';
@@ -14,8 +13,6 @@ class LocalStorageService {
   static const String _userProfileKey = 'user_profile';
   static const String _mealsKey = 'meal_records';
   static const String _legacyApiKey = 'gemini_api_key';
-  static const String _onboardingCompleteKey = 'onboarding_complete';
-  static const String _userDataKey = 'userData';
 
   final SharedPreferences _prefs;
 
@@ -25,7 +22,6 @@ class LocalStorageService {
 
   Future<void> saveUserProfile(UserProfile profile) async {
     await _prefs.setString(_userProfileKey, profile.toJson());
-    await _prefs.setBool(_onboardingCompleteKey, profile.isOnboarded);
 
     final trimmedKey = profile.apiKey?.trim() ?? '';
     if (trimmedKey.isNotEmpty) {
@@ -33,37 +29,6 @@ class LocalStorageService {
     } else {
       await _prefs.remove(_legacyApiKey);
     }
-
-    // Sincronizar metas calóricas y de macronutrientes con DailyTracker
-    final isImperial = profile.unitSystem == 'imperial';
-    final weightKg = isImperial ? profile.weight / 2.20462262 : profile.weight;
-    final targetWeightKg =
-        isImperial ? profile.targetWeight / 2.20462262 : profile.targetWeight;
-    final heightCm = isImperial ? profile.height * 2.54 : profile.height;
-
-    final plan = CalorieCalculator.calculatePlanForProfile(
-      weightKg: weightKg > 0 ? weightKg : 70.0,
-      heightCm: heightCm > 0 ? heightCm : 170.0,
-      age: profile.age > 0 ? profile.age : 25,
-      gender: profile.gender,
-      goal: profile.goal,
-      targetWeightKg: targetWeightKg > 0 ? targetWeightKg : weightKg,
-      goalWeeks: profile.goalWeeks > 0 ? profile.goalWeeks : 8,
-    );
-
-    final userDataMap = {
-      'weight': weightKg,
-      'height': heightCm,
-      'age': profile.age,
-      'activityLevel': 'Light',
-      'gender': profile.gender,
-      'goal': profile.goal,
-      'estimatedCalories': plan['targetCalories'] ?? 2000,
-      'proteinGoal': plan['proteinGoal'] ?? 125,
-      'fatGoal': plan['fatGoal'] ?? 55,
-      'carbsGoal': plan['carbsGoal'] ?? 250,
-    };
-    await _prefs.setString(_userDataKey, jsonEncode(userDataMap));
   }
 
   Future<UserProfile?> getUserProfile() async {

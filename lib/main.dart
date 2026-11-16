@@ -1,5 +1,3 @@
-import 'package:device_preview/device_preview.dart';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,9 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/di/service_locator.dart';
-import 'core/storage/local_storage_service.dart';
 import 'features/calories/presentation/cubit/food_log_cubit.dart';
-import 'features/onboarding/presentation/cubit/onboarding_cubit.dart';
 import 'theme/app_typography.dart';
 import 'theme/theme.dart';
 
@@ -28,22 +24,14 @@ void main() async {
   await _loadEnvironmentFile();
 
   final prefs = await SharedPreferences.getInstance();
-  final userProfile = await LocalStorageService(prefs).getUserProfile();
-  final showOnboarding = !(userProfile?.isOnboarded ?? false);
-
-  await configureDependencies(prefs: prefs, showOnboarding: showOnboarding);
+  await configureDependencies(prefs: prefs);
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  runApp(
-    DevicePreview(
-      enabled: false,
-      builder: (context) => MyApp(router: sl<GoRouter>()),
-    ),
-  );
+  runApp(MyApp(router: sl<GoRouter>()));
 }
 
 class MyApp extends StatelessWidget {
@@ -58,18 +46,13 @@ class MyApp extends StatelessWidget {
       minTextAdapt: true,
       splitScreenMode: true,
       builder: (_, child) {
-        return MultiBlocProvider(
-          providers: [
-            BlocProvider(create: (_) => sl<FoodLogCubit>()),
-            BlocProvider(create: (_) => sl<OnboardingCubit>()),
-          ],
-
+        return BlocProvider(
+          create: (_) => sl<FoodLogCubit>(),
           child: MaterialApp.router(
             routerConfig: router,
             theme: buildLightTheme().copyWith(
               textTheme: AppTypography.textTheme,
             ),
-
             debugShowCheckedModeBanner: false,
             title: 'AI Calorie Tracker',
           ),

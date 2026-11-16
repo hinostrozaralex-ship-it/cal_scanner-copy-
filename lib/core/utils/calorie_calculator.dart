@@ -88,48 +88,6 @@ class CalorieCalculator {
     };
   }
 
-  /// Calculates recommended water intake in milliliters based on weight
-  static int calculateWaterIntake({
-    required double weight, // in kg
-    required String activityLevel,
-  }) {
-    // Base calculation: 30-35ml per kg of body weight
-    double baseWater = weight * 33; // Using 33ml as a middle ground
-
-    // Adjust for activity level
-    double activityMultiplier = switch (activityLevel) {
-      'Sedentary' => 1.0,
-      'Light' => 1.1,
-      'Moderate' => 1.2,
-      'Active' => 1.3,
-      'Very Active' => 1.4,
-      _ => 1.0
-    };
-
-    return (baseWater * activityMultiplier).round();
-  }
-
-  /// Estimates recommended protein intake in grams based on weight and activity level
-  static int calculateProteinNeeds({
-    required double weight, // in kg
-    required String activityLevel,
-    required String goal,
-  }) {
-    // Base protein requirements (in g/kg of body weight)
-    double proteinMultiplier = switch (goal) {
-      'Weight Loss' => 2.0, // Higher protein for muscle preservation
-      'Muscle Gain' => 2.2, // Higher protein for muscle growth
-      _ => 1.8 // Maintenance
-    };
-
-    // Adjust for activity level
-    if (activityLevel == 'Active' || activityLevel == 'Very Active') {
-      proteinMultiplier += 0.2;
-    }
-
-    return (weight * proteinMultiplier).round();
-  }
-
   /// Returns medically safe target weight bounds (in kg) based on current weight,
   /// height (BMI >= 18.5), and safe per-cycle body weight change limits.
   static Map<String, double> getSafeWeightBounds({

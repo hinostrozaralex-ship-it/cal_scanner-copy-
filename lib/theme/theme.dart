@@ -1,13 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'color_schemes.dart';
-
-Color _colorFromHex(String hex) {
-  final cleaned = hex.replaceFirst('#', '');
-  return Color(int.parse('ff$cleaned', radix: 16));
-}
 
 class AppDesignTokens extends ThemeExtension<AppDesignTokens> {
   const AppDesignTokens({
@@ -119,52 +112,8 @@ ThemeData _buildTheme(
 
 ThemeData buildLightTheme() {
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: Color(0xfff9f6f1),
+    seedColor: const Color(0xfff9f6f1),
     brightness: Brightness.light,
   );
   return _buildTheme(colorScheme, AppPalettes.light);
-}
-
-CupertinoThemeData buildCupertinoTheme({required String primaryColorHex}) {
-  final seed = _colorFromHex(
-    primaryColorHex.isNotEmpty ? primaryColorHex : '#007AFF',
-  );
-
-  return CupertinoThemeData(
-    applyThemeToAll: true,
-    primaryColor: seed,
-    primaryContrastingColor: CupertinoColors.white,
-    brightness: Brightness.light,
-    scaffoldBackgroundColor: CupertinoColors.systemBackground,
-    barBackgroundColor: CupertinoColors.systemGrey6,
-    textTheme: CupertinoTextThemeData(
-      primaryColor: seed,
-      textStyle: const TextStyle(fontSize: 17, letterSpacing: -0.41),
-      actionTextStyle: TextStyle(
-        color: seed,
-        fontSize: 17,
-        fontWeight: FontWeight.w400,
-      ),
-      navTitleTextStyle: const TextStyle(
-        fontWeight: FontWeight.w600,
-        fontSize: 17,
-        letterSpacing: -0.41,
-      ),
-      navLargeTitleTextStyle: const TextStyle(
-        fontWeight: FontWeight.bold,
-        fontSize: 34,
-        letterSpacing: 0.41,
-      ),
-      tabLabelTextStyle: const TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w500,
-        letterSpacing: -0.24,
-      ),
-      pickerTextStyle: const TextStyle(fontSize: 21, letterSpacing: -0.41),
-      dateTimePickerTextStyle: const TextStyle(
-        fontSize: 21,
-        letterSpacing: -0.41,
-      ),
-    ),
-  );
 }

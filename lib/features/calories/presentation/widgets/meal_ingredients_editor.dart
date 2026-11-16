@@ -68,23 +68,29 @@ class MealIngredientsEditor extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.restaurant_menu_rounded,
-                    size: 18.sp,
-                    color: AppColors.kOrange,
-                  ),
-                  SizedBox(width: 6.w),
-                  Text(
-                    'Meal Ingredients (${ingredients.length})',
-                    style: AppTypography.titleMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.kBlack,
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.restaurant_menu_rounded,
+                      size: 18.sp,
+                      color: AppColors.kOrange,
                     ),
-                  ),
-                ],
+                    SizedBox(width: 6.w),
+                    Flexible(
+                      child: Text(
+                        'Meal Ingredients (${ingredients.length})',
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.titleMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.kBlack,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              SizedBox(width: 8.w),
               TextButton.icon(
                 onPressed: () => _showAddIngredientSheet(context),
                 style: TextButton.styleFrom(
@@ -252,18 +258,28 @@ class _IngredientRowItemState extends State<_IngredientRowItem> {
               ),
             ],
           ),
-          SizedBox(height: 6.h),
+          SizedBox(height: 4.h),
+          Text(
+            'P: ${item.protein.round()}g  •  C: ${item.carbs.round()}g  •  F: ${item.fat.round()}g',
+            style: AppTypography.bodySmall.copyWith(
+              fontSize: 11.5.sp,
+              color: AppColors.kBlack.withValues(alpha: 0.6),
+            ),
+          ),
+          SizedBox(height: 8.h),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'P: ${item.protein.round()}g  •  C: ${item.carbs.round()}g  •  F: ${item.fat.round()}g',
+                'Portion',
                 style: AppTypography.bodySmall.copyWith(
                   fontSize: 11.5.sp,
-                  color: AppColors.kBlack.withValues(alpha: 0.6),
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.kBlack.withValues(alpha: 0.55),
                 ),
               ),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _MiniStepButton(
                     icon: Icons.remove,
@@ -271,7 +287,7 @@ class _IngredientRowItemState extends State<_IngredientRowItem> {
                   ),
                   SizedBox(width: 6.w),
                   SizedBox(
-                    width: 58.w,
+                    width: 64.w,
                     child: TextField(
                       controller: _qtyController,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -313,12 +329,16 @@ class _IngredientRowItemState extends State<_IngredientRowItem> {
                     onTap: () => _stepQuantity(widget.step),
                   ),
                   SizedBox(width: 6.w),
-                  Text(
-                    item.servingUnit,
-                    style: AppTypography.bodySmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.kOrange,
-                      fontSize: 12.sp,
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: 42.w),
+                    child: Text(
+                      item.servingUnit,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.kOrange,
+                        fontSize: 12.sp,
+                      ),
                     ),
                   ),
                 ],
@@ -516,10 +536,27 @@ class _AddIngredientSheetState extends State<_AddIngredientSheet> {
               ),
             ),
             SizedBox(height: 12.h),
+            Text(
+              ' Ingredient Name',
+              style: AppTypography.bodySmall.copyWith(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColors.kBlack.withValues(alpha: 0.7),
+              ),
+            ),
+            SizedBox(height: 5.h),
             TextField(
               controller: _nameController,
               decoration: InputDecoration(
-                labelText: 'Ingredient Name (e.g. Fried Egg, Avocado)',
+                hintText: 'e.g. Fried Egg, Avocado',
+                hintStyle: AppTypography.bodySmall.copyWith(
+                  color: AppColors.kBlack.withValues(alpha: 0.4),
+                ),
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 14.w,
+                  vertical: 12.h,
+                ),
                 filled: true,
                 fillColor: AppColors.kScaffold,
                 border: OutlineInputBorder(
@@ -533,43 +570,80 @@ class _AddIngredientSheetState extends State<_AddIngredientSheet> {
               children: [
                 Expanded(
                   flex: 2,
-                  child: TextField(
-                    controller: _qtyController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Amount',
-                      filled: true,
-                      fillColor: AppColors.kScaffold,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14.r),
-                        borderSide: BorderSide.none,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ' Amount',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.kBlack.withValues(alpha: 0.7),
+                        ),
                       ),
-                    ),
+                      SizedBox(height: 5.h),
+                      TextField(
+                        controller: _qtyController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '100',
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 14.w,
+                            vertical: 12.h,
+                          ),
+                          filled: true,
+                          fillColor: AppColors.kScaffold,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14.r),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 SizedBox(width: 10.w),
                 Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _unit,
-                    decoration: InputDecoration(
-                      labelText: 'Unit',
-                      filled: true,
-                      fillColor: AppColors.kScaffold,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14.r),
-                        borderSide: BorderSide.none,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ' Unit',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.kBlack.withValues(alpha: 0.7),
+                        ),
                       ),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'g', child: Text('g')),
-                      DropdownMenuItem(value: 'ml', child: Text('ml')),
-                      DropdownMenuItem(value: 'unit', child: Text('unit')),
+                      SizedBox(height: 5.h),
+                      DropdownButtonFormField<String>(
+                        initialValue: _unit,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12.w,
+                            vertical: 10.h,
+                          ),
+                          filled: true,
+                          fillColor: AppColors.kScaffold,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14.r),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'g', child: Text('g')),
+                          DropdownMenuItem(value: 'ml', child: Text('ml')),
+                          DropdownMenuItem(value: 'unit', child: Text('unit')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _unit = val);
+                        },
+                      ),
                     ],
-                    onChanged: (val) {
-                      if (val != null) setState(() => _unit = val);
-                    },
                   ),
                 ),
               ],
@@ -615,27 +689,35 @@ class _AddIngredientSheetState extends State<_AddIngredientSheet> {
                   child: _MiniMacroField(
                     controller: _calController,
                     label: 'Calories',
+                    suffix: 'kcal',
                   ),
                 ),
-                SizedBox(width: 8.w),
+                SizedBox(width: 10.w),
                 Expanded(
                   child: _MiniMacroField(
                     controller: _protController,
-                    label: 'Protein (g)',
+                    label: 'Protein',
+                    suffix: 'g',
                   ),
                 ),
-                SizedBox(width: 8.w),
+              ],
+            ),
+            SizedBox(height: 10.h),
+            Row(
+              children: [
                 Expanded(
                   child: _MiniMacroField(
                     controller: _carbsController,
-                    label: 'Carbs (g)',
+                    label: 'Carbs',
+                    suffix: 'g',
                   ),
                 ),
-                SizedBox(width: 8.w),
+                SizedBox(width: 10.w),
                 Expanded(
                   child: _MiniMacroField(
                     controller: _fatController,
-                    label: 'Fat (g)',
+                    label: 'Fat',
+                    suffix: 'g',
                   ),
                 ),
               ],
@@ -672,31 +754,58 @@ class _AddIngredientSheetState extends State<_AddIngredientSheet> {
 class _MiniMacroField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
+  final String suffix;
 
   const _MiniMacroField({
     required this.controller,
     required this.label,
+    required this.suffix,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      textAlign: TextAlign.center,
-      style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w700),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(fontSize: 10.5.sp),
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 10.h),
-        filled: true,
-        fillColor: AppColors.kScaffold,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.r),
-          borderSide: BorderSide.none,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          ' $label',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.bodySmall.copyWith(
+            fontSize: 11.5.sp,
+            fontWeight: FontWeight.w600,
+            color: AppColors.kBlack.withValues(alpha: 0.7),
+          ),
         ),
-      ),
+        SizedBox(height: 4.h),
+        TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: AppTypography.titleSmall.copyWith(
+            fontWeight: FontWeight.w700,
+            fontSize: 13.5.sp,
+          ),
+          decoration: InputDecoration(
+            suffixText: suffix,
+            suffixStyle: AppTypography.bodySmall.copyWith(
+              fontSize: 11.5.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.kOrange,
+            ),
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12.w,
+              vertical: 10.h,
+            ),
+            filled: true,
+            fillColor: AppColors.kScaffold,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

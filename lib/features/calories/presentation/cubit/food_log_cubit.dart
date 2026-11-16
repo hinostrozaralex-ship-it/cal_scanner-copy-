@@ -1,7 +1,5 @@
 import 'dart:io';
 
-import 'package:cal_scanner/core/di/service_locator.dart';
-import 'package:cal_scanner/core/storage/local_storage_service.dart';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -80,9 +78,6 @@ class FoodLogCubit extends Cubit<FoodLogState> {
     emit(state.copyWith(selectedDate: mealDay));
 
     final result = await _addFood(meal);
-    if (sl.isRegistered<LocalStorageService>()) {
-      await sl<LocalStorageService>().saveMeal(MealRecord.fromFood(meal));
-    }
 
     await result.fold(
       (l) async => emit(state.copyWith(error: l.message)),
@@ -147,30 +142,7 @@ class FoodLogCubit extends Cubit<FoodLogState> {
     );
   }
 
-  void clearMessages() {
-    emit(
-      FoodLogState(
-        meals: state.meals,
-        totalCalories: state.totalCalories,
-        totalProtein: state.totalProtein,
-        totalCarbs: state.totalCarbs,
-        totalFat: state.totalFat,
-        weeklyData: state.weeklyData,
-        isLoading: state.isLoading,
-        error: null,
-        successMessage: null,
-        selectedImage: state.selectedImage,
-        isScanning: state.isScanning,
-        scannedMeal: state.scannedMeal,
-        selectedDate: state.selectedDate,
-      ),
-    );
-  }
-
   Future<void> deleteMeal(Food meal) async {
-    if (sl.isRegistered<LocalStorageService>()) {
-      await sl<LocalStorageService>().deleteMeal(meal.id);
-    }
     final result = await _deleteFood(meal);
     await result.fold(
       (l) async => emit(state.copyWith(error: l.message)),
@@ -179,20 +151,10 @@ class FoodLogCubit extends Cubit<FoodLogState> {
   }
 
   Future<void> updateMeal(Food meal) async {
-    if (sl.isRegistered<LocalStorageService>()) {
-      await sl<LocalStorageService>().updateMeal(MealRecord.fromFood(meal));
-    }
     final result = await _updateFood(meal);
     await result.fold(
       (l) async => emit(state.copyWith(error: l.message)),
       (_) async => loadDailyLog(),
     );
-  }
-
-  Future<void> refreshForNewDay() async {
-    final today = DateTime.now();
-    final normalized = DateTime(today.year, today.month, today.day);
-    emit(state.copyWith(selectedDate: normalized));
-    await loadDailyLog();
   }
 }

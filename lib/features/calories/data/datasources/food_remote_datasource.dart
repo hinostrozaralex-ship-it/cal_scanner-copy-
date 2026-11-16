@@ -11,21 +11,14 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/storage/local_storage_service.dart';
 import '../../domain/entities/food.dart';
 
-const String primaryModel = 'gemini-3.5-flash-lite';
-const String fallbackModel = 'gemini-3.8-flash';
-const String highDemandErrorMessage =
-    "AI servers are experiencing high demand right now. Please tap 'Try Again' and retry in a few seconds.";
-
 class FoodRemoteDataSource {
-  static const String primaryModel = 'gemini-3.5-flash-lite';
-  static const String fallbackModel = 'gemini-3.8-flash';
+  static const String primaryModel = 'gemini-2.5-flash';
+  static const String fallbackModel = 'gemini-2.5-flash-lite';
   static const List<String> candidateModels = <String>[
     primaryModel,
     fallbackModel,
-    'gemini-3.6-flash',
-    'gemini-3.1-flash-lite',
+    'gemini-2.0-flash',
     'gemini-flash-latest',
-    'gemini-2.5-flash',
   ];
 
   static const Duration perAttemptTimeout = Duration(seconds: 20);
@@ -976,6 +969,7 @@ Guidelines:
       final stopwatch = Stopwatch()..start();
       final modelsQueue = List<String>.from(candidateModels);
       final triedModels = <String>{};
+      bool discoveryAttempted = false;
       int? lastStatusCode;
       String? lastResponseBody;
 
@@ -1040,6 +1034,20 @@ Guidelines:
         }
 
         if (_isModelNotAvailableError(lastStatusCode ?? 0, lastResponseBody ?? '')) {
+          if (index >= modelsQueue.length && !discoveryAttempted) {
+            discoveryAttempted = true;
+            final discRemaining = totalOperationTimeout - stopwatch.elapsed;
+            if (discRemaining > const Duration(seconds: 4)) {
+              final discovered = await _discoverAvailableFlashModel(
+                apiKey: apiKey,
+                triedModels: triedModels,
+                timeout: const Duration(seconds: 6),
+              );
+              if (discovered != null && !triedModels.contains(discovered)) {
+                modelsQueue.add(discovered);
+              }
+            }
+          }
           continue;
         }
 
@@ -1057,9 +1065,13 @@ Guidelines:
       }
 
       if (lastStatusCode == 429) {
-        return left(
-          NetworkFailure(highDemandErrorMessage, cause: lastResponseBody),
-        );
+        final message = _isPermanentQuotaZeroError(
+              lastStatusCode!,
+              lastResponseBody ?? '',
+            )
+            ? quotaExceededErrorMessage
+            : highDemandErrorMessage;
+        return left(NetworkFailure(message, cause: lastResponseBody));
       }
 
       return left(

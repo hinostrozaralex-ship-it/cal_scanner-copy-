@@ -1,11 +1,10 @@
 import 'package:cal_scanner/core/di/service_locator.dart';
+import 'package:cal_scanner/core/routes/app_routes.dart';
 import 'package:cal_scanner/core/storage/local_storage_service.dart';
 import 'package:cal_scanner/gen/assets.gen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-
-import '../../../../../core/routes/app_routes.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -38,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       body: Center(
         child: ClipRRect(
-          borderRadius: BorderRadiusGeometry.circular(1000),
+          borderRadius: BorderRadius.circular(1000),
           child: Image.asset(Assets.images.splash.path, height: 130.h),
         ),
       ),
