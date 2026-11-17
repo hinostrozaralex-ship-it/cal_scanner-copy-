@@ -119,7 +119,7 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
       (failure) {
         setState(() {
           _isGeneratingAi = false;
-          _aiError = failure.message;
+          _aiError = failure.displayMessage;
         });
       },
       (food) {

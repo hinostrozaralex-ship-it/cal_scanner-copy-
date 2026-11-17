@@ -177,9 +177,9 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 60,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
       );
       if (!mounted) return;
       if (picked != null) {

@@ -441,7 +441,7 @@ class _AddIngredientSheetState extends State<_AddIngredientSheet> {
       (failure) {
         setState(() {
           _isEstimating = false;
-          _aiError = failure.message;
+          _aiError = failure.displayMessage;
         });
       },
       (food) {

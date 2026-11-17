@@ -23,6 +23,7 @@ void main() {
   late File testImageFile;
 
   setUp(() async {
+    FoodRemoteDataSource.resetCachedModelForTesting();
     SharedPreferences.setMockInitialValues({});
     tempDir = await Directory.systemTemp.createTemp('cal_scanner_test_');
     testImageFile = File('${tempDir.path}/meal.jpg');
@@ -330,6 +331,107 @@ void main() {
         result.fold((l) => l.message, (_) => ''),
         FoodRemoteDataSource.invalidResponseErrorMessage,
       );
+    });
+
+    test('11. New schema: per-100 values are scaled by the app to the package amount', () async {
+      final storage = await createStorageWithKey('user_test_key_123');
+
+      final client = MockClient((request) async {
+        return http.Response(
+          buildGeminiSuccessBody({
+            'is_food': true,
+            'name': 'Bifrutas Mediterranean',
+            'label_visible': true,
+            'non_food_message': null,
+            'ingredients': [
+              {
+                'name': 'Bifrutas Mediterranean',
+                'amount': 330,
+                'amount_unit': 'ml',
+                'per_100_calories': 25,
+                'per_100_protein': 0.5,
+                'per_100_carbs': 5.4,
+                'per_100_fat': 0,
+              },
+            ],
+          }),
+          200,
+        );
+      });
+
+      final dataSource = FoodRemoteDataSource(
+        storage,
+        client: client,
+        delay: (_) async {},
+      );
+
+      final result = await dataSource.detectFoodAndCalories(testImageFile);
+      expect(result.isRight(), isTrue);
+
+      final food = result.getOrElse((_) => throw StateError('Expected Right'));
+      expect(food.servingSize, 330.0);
+      expect(food.servingUnit, 'ml');
+      expect(food.calories, closeTo(82.5, 0.06));
+      expect(food.carbs, closeTo(17.8, 0.06));
+      expect(food.protein, closeTo(1.65, 0.06));
+      expect(food.fat, 0.0);
+      expect(food.baseCalories, food.calories);
+      expect(food.ingredients.length, 1);
+      expect(food.ingredients.first.servingSize, 330.0);
+    });
+
+    test('12. New schema: root totals are the sum of the ingredients computed by the app', () async {
+      final storage = await createStorageWithKey('user_test_key_123');
+
+      final client = MockClient((request) async {
+        return http.Response(
+          buildGeminiSuccessBody({
+            'is_food': true,
+            'name': 'Chicken with Rice',
+            'label_visible': false,
+            'non_food_message': null,
+            'ingredients': [
+              {
+                'name': 'Cooked Rice',
+                'amount': 200,
+                'amount_unit': 'g',
+                'per_100_calories': 130,
+                'per_100_protein': 2.7,
+                'per_100_carbs': 28,
+                'per_100_fat': 0.3,
+              },
+              {
+                'name': 'Grilled Chicken',
+                'amount': 150,
+                'amount_unit': 'g',
+                'per_100_calories': 165,
+                'per_100_protein': 31,
+                'per_100_carbs': 0,
+                'per_100_fat': 3.6,
+              },
+            ],
+          }),
+          200,
+        );
+      });
+
+      final dataSource = FoodRemoteDataSource(
+        storage,
+        client: client,
+        delay: (_) async {},
+      );
+
+      final result = await dataSource.detectFoodAndCalories(testImageFile);
+      expect(result.isRight(), isTrue);
+
+      final food = result.getOrElse((_) => throw StateError('Expected Right'));
+      expect(food.ingredients.length, 2);
+      expect(food.servingSize, 350.0);
+      expect(food.servingUnit, 'g');
+      expect(food.calories, closeTo(507.5, 0.11));
+      expect(food.protein, closeTo(51.9, 0.11));
+      expect(food.carbs, closeTo(56.0, 0.11));
+      expect(food.fat, closeTo(6.0, 0.11));
     });
   });
 

@@ -12,18 +12,32 @@ import '../../../../core/storage/local_storage_service.dart';
 import '../../domain/entities/food.dart';
 
 class FoodRemoteDataSource {
-  static const String primaryModel = 'gemini-2.5-flash';
-  static const String fallbackModel = 'gemini-2.5-flash-lite';
+  // Google ya respondió "gemini-2.5-flash is no longer available to new users"
+  // y recomendó gemini-3.8-flash. Los modelos que no existan para tu clave se
+  // saltan solos (404) y el último que funcione se recuerda.
+  static const String primaryModel = 'gemini-3.8-flash';
+  static const String fallbackModel = 'gemini-3.5-flash-lite';
   static const List<String> candidateModels = <String>[
     primaryModel,
     fallbackModel,
-    'gemini-2.0-flash',
+    'gemini-3.6-flash',
     'gemini-flash-latest',
+    'gemini-2.5-flash-lite',
   ];
 
   static const Duration perAttemptTimeout = Duration(seconds: 20);
   static const Duration totalOperationTimeout = Duration(seconds: 45);
   static const Duration retryBaseDelay = Duration(milliseconds: 800);
+
+  /// Último modelo que respondió con éxito. Se prueba primero en el siguiente
+  /// escaneo: evita 404 de modelos retirados y mantiene el mismo modelo entre
+  /// escaneos (más consistencia).
+  static String? _lastWorkingModel;
+
+  @visibleForTesting
+  static void resetCachedModelForTesting() {
+    _lastWorkingModel = null;
+  }
 
   static const String missingApiKeyErrorMessage =
       'Please enter your Gemini API Key in Settings.';
@@ -55,6 +69,82 @@ class FoodRemoteDataSource {
     Future<void> Function(Duration)? delay,
   }) : _client = client ?? http.Client(),
        _delay = delay ?? Future<void>.delayed;
+
+  List<String> _orderedCandidates() {
+    final list = List<String>.from(candidateModels);
+    final preferred = _lastWorkingModel;
+    if (preferred != null) {
+      list.remove(preferred);
+      list.insert(0, preferred);
+    }
+    return list;
+  }
+
+  double _round1(double value) => double.parse(value.toStringAsFixed(1));
+
+  /// Convierte un ingrediente devuelto por Gemini en [FoodIngredient].
+  /// Esquema nuevo: `amount` + `per_100_*` (la app hace la multiplicación).
+  /// Esquema antiguo: `serving_size` + totales ya calculados por la IA.
+  FoodIngredient? _parseIngredientMap(Map item, int idx) {
+    final name = item['name']?.toString().trim() ?? '';
+    if (name.isEmpty) return null;
+
+    final parsedAmount = _parseNonNegativeDouble(
+      item['amount'] ?? item['serving_size'] ?? item['servingSize'],
+    );
+    final amount = (parsedAmount != null && parsedAmount > 0)
+        ? parsedAmount
+        : 100.0;
+
+    final rawUnit =
+        (item['amount_unit'] ?? item['serving_unit'] ?? item['servingUnit'])
+            ?.toString()
+            .trim() ??
+        '';
+    final unit = rawUnit.isNotEmpty ? rawUnit : 'g';
+
+    final per100Calories = _parseNonNegativeDouble(item['per_100_calories']);
+    final double calories;
+    final double protein;
+    final double carbs;
+    final double fat;
+    if (per100Calories != null) {
+      final factor = amount / 100.0;
+      calories = _round1(per100Calories * factor);
+      protein = _round1(
+        (_parseNonNegativeDouble(item['per_100_protein']) ?? 0.0) * factor,
+      );
+      carbs = _round1(
+        (_parseNonNegativeDouble(item['per_100_carbs']) ?? 0.0) * factor,
+      );
+      fat = _round1(
+        (_parseNonNegativeDouble(item['per_100_fat']) ?? 0.0) * factor,
+      );
+    } else {
+      final legacyCal = _parseNonNegativeDouble(item['calories']);
+      if (legacyCal == null) return null;
+      calories = legacyCal;
+      protein = _parseNonNegativeDouble(item['protein']) ?? 0.0;
+      carbs = _parseNonNegativeDouble(item['carbs']) ?? 0.0;
+      fat = _parseNonNegativeDouble(item['fat']) ?? 0.0;
+    }
+
+    return FoodIngredient(
+      id: '${DateTime.now().microsecondsSinceEpoch}_$idx',
+      name: name,
+      quantity: amount,
+      servingSize: amount,
+      servingUnit: unit,
+      calories: calories,
+      protein: protein,
+      carbs: carbs,
+      fat: fat,
+      baseCalories: calories,
+      baseProtein: protein,
+      baseCarbs: carbs,
+      baseFat: fat,
+    );
+  }
 
   Future<String?> _resolveApiKey() async {
     final storedKey = await _localStorage.getApiKey();
@@ -123,6 +213,8 @@ class FoodRemoteDataSource {
         ? _buildThinkingConfigForModel(model)
         : null;
 
+    final seedValue = includeThinkingConfig ? 42 : null;
+
     final trimmedHint = userHint?.trim() ?? '';
     final hintSection = trimmedHint.isNotEmpty
         ? '\nIMPORTANT USER HINT / CORRECTION:\nThe user states: "$trimmedHint".\nYou MUST prioritize this user correction/description to identify the food, its ingredients, and its quantities accurately (even if the image looks ambiguous).\n'
@@ -145,32 +237,31 @@ Analyze the provided image and return ONLY a valid raw JSON object (without mark
 {
   "is_food": boolean,
   "name": string,
-  "serving_size": number,
-  "serving_unit": string,
-  "calories": number,
-  "protein": number,
-  "carbs": number,
-  "fat": number,
+  "label_visible": boolean,
   "non_food_message": string or null,
   "ingredients": [
     {
       "name": string,
-      "serving_size": number,
-      "serving_unit": string,
-      "calories": number,
-      "protein": number,
-      "carbs": number,
-      "fat": number
+      "amount": number,
+      "amount_unit": string,
+      "per_100_calories": number,
+      "per_100_protein": number,
+      "per_100_carbs": number,
+      "per_100_fat": number
     }
   ]
 }
 $hintSection
 Guidelines:
 - Keep the food and ingredient names in the language of the user hint if provided, otherwise in English.
-- If the image shows a non-food item (and no user food hint overrides it), set is_food to false, set calories and macros to 0, ingredients to [], and provide a humorous, clever non_food_message related to what is visible.
+- If the image shows a non-food item (and no user food hint overrides it), set is_food to false, ingredients to [], and provide a humorous, clever non_food_message related to what is visible.
 - If it is food, set is_food to true and non_food_message to null.
-- Break down the meal into its distinct edible components in the "ingredients" array (e.g., for "Chicken with Rice", list "Cooked Rice", "Grilled Chicken", "Salad", etc. with their respective estimated serving_size in "g" or "ml" and their individual calories, protein, carbs, and fat). If it is a single item (e.g., an apple or a drink), include 1 item in "ingredients".
-- Total calories, protein, carbs, fat, and serving_size at the root object must equal the sum of the ingredients.
+- Break down the meal into its distinct edible components in the "ingredients" array (e.g., for "Chicken with Rice", list "Cooked Rice", "Grilled Chicken", "Salad", etc.). If it is a single item (e.g., an apple, a drink or a packaged product), include exactly 1 item in "ingredients".
+- All per_100_* values are per 100 g (or per 100 ml for liquids), NEVER for the whole portion. The app multiplies them by "amount" itself, so do not multiply or scale anything.
+- If a nutrition facts table is visible, set label_visible to true and copy its values per 100 g / 100 ml exactly as printed. If the table only lists values per serving, convert them to per 100 g / 100 ml using the serving size printed on the label.
+- If no nutrition table is visible, set label_visible to false and use the standard reference values per 100 g / 100 ml of that food (or of that exact product if you recognize the brand).
+- "amount" is the total quantity of that ingredient in the photo, with "amount_unit" being "g" or "ml". For a packaged product use the net weight or volume printed on the pack (for example 330 with "ml" for a 330 ml carton). Otherwise estimate the edible portion weight, rounded to the nearest 10 g (25 g for portions above 250 g).
+- Be consistent: the same image must always produce the same answer.
 ''',
                   },
                   {
@@ -185,6 +276,7 @@ Guidelines:
             'generationConfig': {
               'responseMimeType': 'application/json',
               'thinkingConfig': ?thinkingConfig,
+              'seed': ?seedValue,
               'maxOutputTokens': 1200,
             },
           }),
@@ -207,6 +299,8 @@ Guidelines:
         ? _buildThinkingConfigForModel(model)
         : null;
 
+    final seedValue = includeThinkingConfig ? 42 : null;
+
     return _client
         .post(
           url,
@@ -227,30 +321,25 @@ Return ONLY a valid raw JSON object (without markdown code blocks, backticks, or
 {
   "is_food": true,
   "name": string,
-  "serving_size": number,
-  "serving_unit": string,
-  "calories": number,
-  "protein": number,
-  "carbs": number,
-  "fat": number,
   "non_food_message": null,
   "ingredients": [
     {
       "name": string,
-      "serving_size": number,
-      "serving_unit": string,
-      "calories": number,
-      "protein": number,
-      "carbs": number,
-      "fat": number
+      "amount": number,
+      "amount_unit": string,
+      "per_100_calories": number,
+      "per_100_protein": number,
+      "per_100_carbs": number,
+      "per_100_fat": number
     }
   ]
 }
 Guidelines:
 - Use the same language as the user's description for "name" and ingredient names.
-- Break down the meal into its individual components in "ingredients" with realistic portions (in "g" or "ml") and accurate nutritional values (calories, protein, carbs, fat).
-- If the user described a single ingredient (e.g., "1 fried egg 50g"), return that single item in both the root fields and as 1 element in "ingredients".
-- Root calories, protein, carbs, fat, and serving_size must match the sum of the ingredients.
+- Break down the meal into its individual components in "ingredients". If the user described a single ingredient (e.g., "1 fried egg 50g"), return exactly 1 item.
+- All per_100_* values are per 100 g (or per 100 ml for liquids), NEVER for the whole portion, and must be the standard reference values of that food. The app multiplies them by "amount" itself, so do not multiply or scale anything.
+- "amount" is the quantity of each ingredient, with "amount_unit" being "g" or "ml". Use the quantity stated by the user when there is one; otherwise estimate a realistic portion rounded to the nearest 10 g.
+- Be consistent: the same description must always produce the same answer.
 ''',
                   },
                 ],
@@ -259,6 +348,7 @@ Guidelines:
             'generationConfig': {
               'responseMimeType': 'application/json',
               'thinkingConfig': ?thinkingConfig,
+              'seed': ?seedValue,
               'maxOutputTokens': 1200,
             },
           }),
@@ -564,25 +654,6 @@ Guidelines:
         : (rawIsFood?.toString().toLowerCase() != 'false');
 
     final rawName = foodData['name']?.toString().trim() ?? '';
-    final parsedServingSize = _parseNonNegativeDouble(
-      foodData['serving_size'] ?? foodData['servingSize'],
-    );
-    final servingSize = (parsedServingSize != null && parsedServingSize > 0)
-        ? parsedServingSize
-        : (isFood ? 100.0 : 1.0);
-
-    final rawServingUnit =
-        (foodData['serving_unit'] ?? foodData['servingUnit'])
-            ?.toString()
-            .trim() ??
-        '';
-    final servingUnit = rawServingUnit.isNotEmpty ? rawServingUnit : 'g';
-
-    final calories = _parseNonNegativeDouble(foodData['calories']);
-    final protein = _parseNonNegativeDouble(foodData['protein']);
-    final carbs = _parseNonNegativeDouble(foodData['carbs']);
-    final fat = _parseNonNegativeDouble(foodData['fat']);
-
     final rawNonFoodMsg =
         (foodData['non_food_message'] ?? foodData['nonFoodMessage'])
             ?.toString()
@@ -602,12 +673,12 @@ Guidelines:
           protein: 0.0,
           carbs: 0.0,
           fat: 0.0,
-          quantity: servingSize,
+          quantity: 1.0,
           imageUrl: imagePath,
           timestamp: DateTime.now(),
           isFood: false,
-          servingSize: servingSize,
-          servingUnit: servingUnit,
+          servingSize: 1.0,
+          servingUnit: 'g',
           baseCalories: 0.0,
           baseProtein: 0.0,
           baseCarbs: 0.0,
@@ -617,69 +688,90 @@ Guidelines:
       );
     }
 
-    if (rawName.isEmpty ||
-        calories == null ||
-        protein == null ||
-        carbs == null ||
-        fat == null ||
-        calories < 0 ||
-        protein < 0 ||
-        carbs < 0 ||
-        fat < 0) {
-      _logSafe('Incomplete or invalid nutritional fields: $foodData', apiKey);
-      return left(
-        NetworkFailure(invalidResponseErrorMessage, cause: foodData),
-      );
-    }
-
     final parsedIngredients = <FoodIngredient>[];
     final rawIngredients = foodData['ingredients'];
     if (rawIngredients is List) {
       var idx = 0;
       for (final item in rawIngredients) {
         if (item is! Map) continue;
-        final ingName = item['name']?.toString().trim() ?? '';
-        if (ingName.isEmpty) continue;
-        final ingCal = _parseNonNegativeDouble(item['calories']) ?? 0.0;
-        final ingProt = _parseNonNegativeDouble(item['protein']) ?? 0.0;
-        final ingCarbs = _parseNonNegativeDouble(item['carbs']) ?? 0.0;
-        final ingFat = _parseNonNegativeDouble(item['fat']) ?? 0.0;
-        final ingSize = _parseNonNegativeDouble(
-              item['serving_size'] ?? item['servingSize'],
-            ) ??
-            100.0;
-        final safeIngSize = ingSize > 0 ? ingSize : 100.0;
-        final ingUnitRaw =
-            (item['serving_unit'] ?? item['servingUnit'])?.toString().trim() ??
-                '';
-        final ingUnit = ingUnitRaw.isNotEmpty ? ingUnitRaw : servingUnit;
-
-        parsedIngredients.add(
-          FoodIngredient(
-            id: '${DateTime.now().microsecondsSinceEpoch}_$idx',
-            name: ingName,
-            quantity: safeIngSize,
-            servingSize: safeIngSize,
-            servingUnit: ingUnit,
-            calories: ingCal,
-            protein: ingProt,
-            carbs: ingCarbs,
-            fat: ingFat,
-            baseCalories: ingCal,
-            baseProtein: ingProt,
-            baseCarbs: ingCarbs,
-            baseFat: ingFat,
-          ),
-        );
+        final ingredient = _parseIngredientMap(item, idx);
+        if (ingredient == null) continue;
+        parsedIngredients.add(ingredient);
         idx++;
       }
     }
 
-    if (parsedIngredients.isEmpty) {
+    var foodName = rawName;
+    final double servingSize;
+    final String servingUnit;
+    final double calories;
+    final double protein;
+    final double carbs;
+    final double fat;
+
+    if (parsedIngredients.isNotEmpty) {
+      // Los totales los calcula la app sumando los ingredientes (la IA ya no
+      // hace sumas ni multiplicaciones).
+      calories = _round1(
+        parsedIngredients.fold<double>(0.0, (sum, i) => sum + i.calories),
+      );
+      protein = _round1(
+        parsedIngredients.fold<double>(0.0, (sum, i) => sum + i.protein),
+      );
+      carbs = _round1(
+        parsedIngredients.fold<double>(0.0, (sum, i) => sum + i.carbs),
+      );
+      fat = _round1(
+        parsedIngredients.fold<double>(0.0, (sum, i) => sum + i.fat),
+      );
+      final totalAmount = parsedIngredients.fold<double>(
+        0.0,
+        (sum, i) => sum + i.servingSize,
+      );
+      servingSize = totalAmount > 0 ? totalAmount : 100.0;
+      final units = parsedIngredients.map((i) => i.servingUnit).toSet();
+      servingUnit = units.length == 1 ? units.first : 'g';
+      if (foodName.isEmpty) foodName = parsedIngredients.first.name;
+    } else {
+      // Compatibilidad con respuestas antiguas sin lista de ingredientes.
+      final legacyCalories = _parseNonNegativeDouble(foodData['calories']);
+      final legacyProtein = _parseNonNegativeDouble(foodData['protein']);
+      final legacyCarbs = _parseNonNegativeDouble(foodData['carbs']);
+      final legacyFat = _parseNonNegativeDouble(foodData['fat']);
+
+      if (foodName.isEmpty ||
+          legacyCalories == null ||
+          legacyProtein == null ||
+          legacyCarbs == null ||
+          legacyFat == null) {
+        _logSafe('Incomplete or invalid nutritional fields: $foodData', apiKey);
+        return left(
+          NetworkFailure(invalidResponseErrorMessage, cause: foodData),
+        );
+      }
+
+      calories = legacyCalories;
+      protein = legacyProtein;
+      carbs = legacyCarbs;
+      fat = legacyFat;
+
+      final parsedServingSize = _parseNonNegativeDouble(
+        foodData['serving_size'] ?? foodData['servingSize'],
+      );
+      servingSize = (parsedServingSize != null && parsedServingSize > 0)
+          ? parsedServingSize
+          : 100.0;
+      final rawServingUnit =
+          (foodData['serving_unit'] ?? foodData['servingUnit'])
+              ?.toString()
+              .trim() ??
+          '';
+      servingUnit = rawServingUnit.isNotEmpty ? rawServingUnit : 'g';
+
       parsedIngredients.add(
         FoodIngredient(
           id: '${DateTime.now().microsecondsSinceEpoch}_0',
-          name: rawName,
+          name: foodName,
           quantity: servingSize,
           servingSize: servingSize,
           servingUnit: servingUnit,
@@ -698,7 +790,7 @@ Guidelines:
     return right(
       Food(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: rawName,
+        name: foodName,
         calories: calories,
         protein: protein,
         carbs: carbs,
@@ -745,9 +837,10 @@ Guidelines:
       final mimeType = _detectMimeType(imageFile.path);
 
       final stopwatch = Stopwatch()..start();
-      final modelsQueue = List<String>.from(candidateModels);
+      final modelsQueue = _orderedCandidates();
       final triedModels = <String>{};
       bool discoveryAttempted = false;
+      var overloadedAttempts = 0;
 
       int? lastStatusCode;
       String? lastResponseBody;
@@ -801,6 +894,7 @@ Guidelines:
         lastResponseBody = response.body;
 
         if (response.statusCode == 200) {
+          _lastWorkingModel = model;
           return _parseGeminiResponse(
             response.body,
             apiKey,
@@ -839,6 +933,7 @@ Guidelines:
               lastStatusCode = plainResponse.statusCode;
               lastResponseBody = plainResponse.body;
               if (plainResponse.statusCode == 200) {
+                _lastWorkingModel = model;
                 return _parseGeminiResponse(
                   plainResponse.body,
                   apiKey,
@@ -878,8 +973,10 @@ Guidelines:
             lastStatusCode == 502 ||
             lastStatusCode == 503 ||
             lastStatusCode == 504) {
-          // No reintentar infinitamente: máximo 2 modelos intentados ante saturación/rate-limit
-          if (triedModels.length >= 2) {
+          // Máximo 2 intentos que terminen en saturación/rate-limit. Los 404 de
+          // modelos retirados NO cuentan, para no agotar los reintentos en vano.
+          overloadedAttempts++;
+          if (overloadedAttempts >= 2) {
             break;
           }
           // Si es un 429 de cuota global 0 en el proyecto, cambiar de modelo si hay otro,
@@ -887,7 +984,7 @@ Guidelines:
           final waitRemaining = totalOperationTimeout - stopwatch.elapsed;
           if (waitRemaining > const Duration(seconds: 4) &&
               index < modelsQueue.length) {
-            await _delay(retryBaseDelay * triedModels.length);
+            await _delay(retryBaseDelay * overloadedAttempts);
             continue;
           }
           break;
@@ -908,7 +1005,13 @@ Guidelines:
             )
             ? quotaExceededErrorMessage
             : highDemandErrorMessage;
-        return left(NetworkFailure(message, cause: lastResponseBody));
+        return left(
+          NetworkFailure(
+            message,
+            code: lastStatusCode?.toString(),
+            cause: lastResponseBody,
+          ),
+        );
       }
 
       if (lastStatusCode == 500 ||
@@ -916,7 +1019,24 @@ Guidelines:
           lastStatusCode == 503 ||
           lastStatusCode == 504) {
         return left(
-          NetworkFailure(highDemandErrorMessage, cause: lastResponseBody),
+          NetworkFailure(
+            highDemandErrorMessage,
+            code: lastStatusCode?.toString(),
+            cause: lastResponseBody,
+          ),
+        );
+      }
+
+      if (lastStatusCode == 500 ||
+          lastStatusCode == 502 ||
+          lastStatusCode == 503 ||
+          lastStatusCode == 504) {
+        return left(
+          NetworkFailure(
+            highDemandErrorMessage,
+            code: lastStatusCode?.toString(),
+            cause: lastResponseBody,
+          ),
         );
       }
 
@@ -967,9 +1087,10 @@ Guidelines:
       apiKey = resolvedKey;
 
       final stopwatch = Stopwatch()..start();
-      final modelsQueue = List<String>.from(candidateModels);
+      final modelsQueue = _orderedCandidates();
       final triedModels = <String>{};
       bool discoveryAttempted = false;
+      var overloadedAttempts = 0;
       int? lastStatusCode;
       String? lastResponseBody;
 
@@ -1007,6 +1128,7 @@ Guidelines:
         lastResponseBody = response.body;
 
         if (response.statusCode == 200) {
+          _lastWorkingModel = model;
           return _parseGeminiResponse(response.body, apiKey);
         }
 
@@ -1028,6 +1150,7 @@ Guidelines:
             lastStatusCode = plainResponse.statusCode;
             lastResponseBody = plainResponse.body;
             if (plainResponse.statusCode == 200) {
+              _lastWorkingModel = model;
               return _parseGeminiResponse(plainResponse.body, apiKey);
             }
           } catch (_) {}
@@ -1056,8 +1179,9 @@ Guidelines:
             lastStatusCode == 502 ||
             lastStatusCode == 503 ||
             lastStatusCode == 504) {
-          if (triedModels.length >= 2) break;
-          await _delay(retryBaseDelay * triedModels.length);
+          overloadedAttempts++;
+          if (overloadedAttempts >= 2) break;
+          await _delay(retryBaseDelay * overloadedAttempts);
           continue;
         }
 
@@ -1071,7 +1195,26 @@ Guidelines:
             )
             ? quotaExceededErrorMessage
             : highDemandErrorMessage;
-        return left(NetworkFailure(message, cause: lastResponseBody));
+        return left(
+          NetworkFailure(
+            message,
+            code: lastStatusCode?.toString(),
+            cause: lastResponseBody,
+          ),
+        );
+      }
+
+      if (lastStatusCode == 500 ||
+          lastStatusCode == 502 ||
+          lastStatusCode == 503 ||
+          lastStatusCode == 504) {
+        return left(
+          NetworkFailure(
+            highDemandErrorMessage,
+            code: lastStatusCode?.toString(),
+            cause: lastResponseBody,
+          ),
+        );
       }
 
       return left(

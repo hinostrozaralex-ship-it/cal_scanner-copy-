@@ -112,7 +112,7 @@ class FoodLogCubit extends Cubit<FoodLogState> {
       (failure) async {
         emit(
           state.copyWith(
-            error: failure.message,
+            error: failure.displayMessage,
             successMessage: null,
             isScanning: false,
           ),

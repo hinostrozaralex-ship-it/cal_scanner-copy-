@@ -116,9 +116,9 @@ class _HomeScreenState extends State<HomeScreen>
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: source,
-      maxWidth: 512,
-      maxHeight: 512,
-      imageQuality: 60,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 85,
     );
     if (picked == null) return;
     final file = File(picked.path);
