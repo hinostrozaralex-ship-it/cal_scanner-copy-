@@ -3,12 +3,15 @@ import 'dart:io';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../data/datasources/open_food_facts_datasource.dart';
 import '../../domain/entities/food.dart';
 import '../../domain/usecases/add_food.dart';
+import '../../domain/usecases/cache_barcode_product.dart';
 import '../../domain/usecases/delete_food.dart';
 import '../../domain/usecases/detect_food_from_image.dart';
 import '../../domain/usecases/get_daily_food_log.dart';
 import '../../domain/usecases/get_weekly_calories.dart';
+import '../../domain/usecases/lookup_food_by_barcode.dart';
 import '../../domain/usecases/update_food.dart';
 
 class FoodLogCubit extends Cubit<FoodLogState> {
@@ -18,6 +21,8 @@ class FoodLogCubit extends Cubit<FoodLogState> {
   final DeleteFood _deleteFood;
   final UpdateFood _updateFood;
   final DetectFoodFromImage _detectFoodFromImage;
+  final LookupFoodByBarcode? _lookupFoodByBarcode;
+  final CacheBarcodeProduct? _cacheBarcodeProduct;
 
   FoodLogCubit(
     this._getDailyFoodLog,
@@ -25,8 +30,12 @@ class FoodLogCubit extends Cubit<FoodLogState> {
     this._addFood,
     this._deleteFood,
     this._updateFood,
-    this._detectFoodFromImage,
-  ) : super(FoodLogState());
+    this._detectFoodFromImage, {
+    LookupFoodByBarcode? lookupFoodByBarcode,
+    CacheBarcodeProduct? cacheBarcodeProduct,
+  }) : _lookupFoodByBarcode = lookupFoodByBarcode,
+       _cacheBarcodeProduct = cacheBarcodeProduct,
+       super(FoodLogState());
 
   Future<void> selectDate(DateTime date) async {
     final normalized = DateTime(date.year, date.month, date.day);
@@ -98,7 +107,12 @@ class FoodLogCubit extends Cubit<FoodLogState> {
     );
   }
 
-  Future<void> addMealFromImage(File image, {String? userHint}) async {
+  Future<void> addMealFromImage(
+    File image, {
+    String? userHint,
+    bool labelOnlyMode = false,
+    String? associateBarcode,
+  }) async {
     emit(
       state.copyWith(
         isScanning: true,
@@ -107,7 +121,11 @@ class FoodLogCubit extends Cubit<FoodLogState> {
         clearError: true,
       ),
     );
-    final result = await _detectFoodFromImage(image, userHint: userHint);
+    final result = await _detectFoodFromImage(
+      image,
+      userHint: userHint,
+      labelOnlyMode: labelOnlyMode,
+    );
     await result.fold(
       (failure) async {
         emit(
@@ -123,7 +141,14 @@ class FoodLogCubit extends Cubit<FoodLogState> {
         final stampedMeal = meal.copyWith(
           timestamp: now,
           imageUrl: meal.imageUrl ?? image.path,
+          barcode: associateBarcode ?? meal.barcode,
         );
+        if (associateBarcode != null &&
+            associateBarcode.trim().isNotEmpty &&
+            stampedMeal.isFood &&
+            _cacheBarcodeProduct != null) {
+          await _cacheBarcodeProduct(associateBarcode, stampedMeal);
+        }
         final todayNormalized = DateTime(now.year, now.month, now.day);
 
         emit(
@@ -140,6 +165,23 @@ class FoodLogCubit extends Cubit<FoodLogState> {
         );
       },
     );
+  }
+
+  Future<(BarcodeLookupResult?, String?)> lookupBarcode(String barcode) async {
+    final lookup = _lookupFoodByBarcode;
+    if (lookup == null) {
+      return (null, 'Barcode lookup is not configured.');
+    }
+    final result = await lookup(barcode);
+    return result.fold(
+      (failure) => (null, failure.displayMessage),
+      (data) => (data, null),
+    );
+  }
+
+  Future<void> cacheProductForBarcode(String barcode, Food product) async {
+    if (_cacheBarcodeProduct == null) return;
+    await _cacheBarcodeProduct(barcode, product);
   }
 
   Future<void> deleteMeal(Food meal) async {

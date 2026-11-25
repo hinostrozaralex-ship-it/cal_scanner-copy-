@@ -19,6 +19,9 @@ class FoodModel {
   final double baseFat;
   final String? nonFoodMessage;
   final List<FoodIngredient> ingredients;
+  final String? barcode;
+  final String source;
+  final String? brand;
 
   const FoodModel({
     required this.id,
@@ -39,6 +42,9 @@ class FoodModel {
     double? baseFat,
     this.nonFoodMessage,
     this.ingredients = const [],
+    this.barcode,
+    this.source = FoodSource.aiEstimate,
+    this.brand,
   }) : servingSize = servingSize ?? (quantity > 0 ? quantity : 100.0),
        baseCalories = baseCalories ?? calories,
        baseProtein = baseProtein ?? protein,
@@ -85,6 +91,9 @@ class FoodModel {
       nonFoodMessage:
           (json['nonFoodMessage'] ?? json['non_food_message']) as String?,
       ingredients: ingredients,
+      barcode: json['barcode'] as String?,
+      source: (json['source'] as String?) ?? FoodSource.aiEstimate,
+      brand: json['brand'] as String?,
     );
   }
 
@@ -108,6 +117,9 @@ class FoodModel {
       'baseFat': baseFat,
       'nonFoodMessage': nonFoodMessage,
       'ingredients': ingredients.map((e) => e.toMap()).toList(),
+      if (barcode != null) 'barcode': barcode,
+      'source': source,
+      if (brand != null) 'brand': brand,
     };
   }
 
@@ -131,6 +143,9 @@ class FoodModel {
       baseFat: baseFat,
       nonFoodMessage: nonFoodMessage,
       ingredients: ingredients,
+      barcode: barcode,
+      source: source,
+      brand: brand,
     );
   }
 
@@ -154,6 +169,9 @@ class FoodModel {
       baseFat: food.baseFat,
       nonFoodMessage: food.nonFoodMessage,
       ingredients: food.ingredients,
+      barcode: food.barcode,
+      source: food.source,
+      brand: food.brand,
     );
   }
 }

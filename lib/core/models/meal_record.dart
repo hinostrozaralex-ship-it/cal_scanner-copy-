@@ -21,6 +21,9 @@ class MealRecord {
   final double baseFat;
   final String? nonFoodMessage;
   final List<FoodIngredient> ingredients;
+  final String? barcode;
+  final String source;
+  final String? brand;
 
   const MealRecord({
     required this.id,
@@ -41,6 +44,9 @@ class MealRecord {
     double? baseFat,
     this.nonFoodMessage,
     this.ingredients = const [],
+    this.barcode,
+    this.source = FoodSource.aiEstimate,
+    this.brand,
   }) : servingSize = servingSize ?? (quantity > 0 ? quantity : 100.0),
        baseCalories = baseCalories ?? calories,
        baseProtein = baseProtein ?? protein,
@@ -66,6 +72,9 @@ class MealRecord {
     double? baseFat,
     String? nonFoodMessage,
     List<FoodIngredient>? ingredients,
+    String? barcode,
+    String? source,
+    String? brand,
   }) {
     return MealRecord(
       id: id ?? this.id,
@@ -86,6 +95,9 @@ class MealRecord {
       baseFat: baseFat ?? this.baseFat,
       nonFoodMessage: nonFoodMessage ?? this.nonFoodMessage,
       ingredients: ingredients ?? this.ingredients,
+      barcode: barcode ?? this.barcode,
+      source: source ?? this.source,
+      brand: brand ?? this.brand,
     );
   }
 
@@ -109,6 +121,9 @@ class MealRecord {
       'baseFat': baseFat,
       if (nonFoodMessage != null) 'nonFoodMessage': nonFoodMessage,
       'ingredients': ingredients.map((e) => e.toMap()).toList(),
+      if (barcode != null) 'barcode': barcode,
+      'source': source,
+      if (brand != null) 'brand': brand,
     };
   }
 
@@ -154,6 +169,9 @@ class MealRecord {
       nonFoodMessage:
           (map['nonFoodMessage'] ?? map['non_food_message']) as String?,
       ingredients: ingredients,
+      barcode: map['barcode'] as String?,
+      source: (map['source'] as String?) ?? FoodSource.aiEstimate,
+      brand: map['brand'] as String?,
     );
   }
 
@@ -191,6 +209,9 @@ class MealRecord {
       baseFat: baseFat,
       nonFoodMessage: nonFoodMessage,
       ingredients: ingredients,
+      barcode: barcode,
+      source: source,
+      brand: brand,
     );
   }
 
@@ -214,6 +235,9 @@ class MealRecord {
       baseFat: food.baseFat,
       nonFoodMessage: food.nonFoodMessage,
       ingredients: food.ingredients,
+      barcode: food.barcode,
+      source: food.source,
+      brand: food.brand,
     );
   }
 }

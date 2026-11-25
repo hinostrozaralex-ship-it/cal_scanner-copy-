@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cal_scanner/core/storage/local_storage_service.dart';
+import 'package:cal_scanner/features/calories/data/datasources/barcode_cache_datasource.dart';
 import 'package:cal_scanner/features/calories/data/datasources/food_local_datasource.dart';
 import 'package:cal_scanner/features/calories/data/datasources/food_remote_datasource.dart';
+import 'package:cal_scanner/features/calories/data/datasources/open_food_facts_datasource.dart';
 import 'package:cal_scanner/features/calories/data/repositories/food_repository_impl.dart';
+import 'package:cal_scanner/features/calories/domain/entities/food.dart';
 import 'package:cal_scanner/features/calories/domain/usecases/add_food.dart';
 import 'package:cal_scanner/features/calories/domain/usecases/delete_food.dart';
 import 'package:cal_scanner/features/calories/domain/usecases/detect_food_from_image.dart';
@@ -618,6 +621,164 @@ void main() {
       expect(cubit.state.meals, isEmpty);
 
       await cubit.close();
+    });
+  });
+
+  group('Barcode Lookup, SQLite Cache & Hybrid Open Food Facts Match', () {
+    test('13. Barcode lookup parses Open Food Facts product and caches it for subsequent offline hits', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final storage = LocalStorageService(prefs);
+      var offCalls = 0;
+
+      final offClient = MockClient((request) async {
+        offCalls++;
+        expect(request.url.path, contains('8410128750215.json'));
+        return http.Response(
+          jsonEncode({
+            'status': 1,
+            'product': {
+              'product_name_es': 'Bifrutas Mediterráneo',
+              'brands': 'Pascual',
+              'product_quantity': 330,
+              'product_quantity_unit': 'ml',
+              'nutriments': {
+                'energy-kcal_100g': 25,
+                'proteins_100g': 0.5,
+                'carbohydrates_100g': 5.4,
+                'fat_100g': 0,
+              },
+            },
+          }),
+          200,
+        );
+      });
+
+      final localDs = FoodLocalDataSource(prefs, storage);
+      final remoteDs = FoodRemoteDataSource(storage, delay: (_) async {});
+      final offDs = OpenFoodFactsDataSource(client: offClient);
+      final cacheDs = InMemoryBarcodeCacheDataSource();
+      final repo = FoodRepositoryImpl(
+        localDs,
+        remoteDs,
+        openFoodFacts: offDs,
+        barcodeCache: cacheDs,
+      );
+
+      // First scan hits Open Food Facts
+      final first = await repo.lookupFoodByBarcode('8410128750215');
+      expect(first.isRight(), isTrue);
+      final firstResult = first.getOrElse((_) => throw StateError('Right'));
+      expect(firstResult.isFound, isTrue);
+      expect(firstResult.food!.source, FoodSource.barcode);
+      expect(firstResult.food!.servingSize, 330.0);
+      expect(firstResult.food!.servingUnit, 'ml');
+      expect(firstResult.food!.calories, closeTo(82.5, 0.1));
+      expect(offCalls, 1);
+
+      // Second scan hits local cache (0 additional HTTP calls)
+      final second = await repo.lookupFoodByBarcode('8410128750215');
+      expect(second.isRight(), isTrue);
+      final secondResult = second.getOrElse((_) => throw StateError('Right'));
+      expect(secondResult.isFound, isTrue);
+      expect(secondResult.food!.calories, closeTo(82.5, 0.1));
+      expect(offCalls, 1);
+    });
+
+    test('14. Barcode with missing nutriments returns not-found with partialName', () async {
+      final offClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'status': 1,
+            'product': {
+              'product_name': 'Local Artisan Yogurt',
+              'brands': 'Granja Local',
+              'nutriments': {},
+            },
+          }),
+          200,
+        );
+      });
+
+      final offDs = OpenFoodFactsDataSource(client: offClient);
+      final result = await offDs.getProductByBarcode('1234567890123');
+      expect(result.isRight(), isTrue);
+      final lookup = result.getOrElse((_) => throw StateError('Right'));
+      expect(lookup.isFound, isFalse);
+      expect(lookup.partialName, 'Local Artisan Yogurt');
+    });
+
+    test('15. Hybrid match replaces AI estimate with Open Food Facts data for packaged product without visible label', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final storage = LocalStorageService(prefs);
+      await storage.saveApiKey('user_test_key_123');
+
+      final geminiClient = MockClient((request) async {
+        return http.Response(
+          buildGeminiSuccessBody({
+            'is_food': true,
+            'name': 'Bifrutas Mediterranean',
+            'brand': 'Pascual',
+            'is_packaged': true,
+            'label_visible': false,
+            'non_food_message': null,
+            'ingredients': [
+              {
+                'name': 'Bifrutas Mediterranean',
+                'amount': 330,
+                'amount_unit': 'ml',
+                'per_100_calories': 45,
+                'per_100_protein': 1.0,
+                'per_100_carbs': 10.0,
+                'per_100_fat': 0.5,
+              },
+            ],
+          }),
+          200,
+        );
+      });
+
+      final offClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'products': [
+              {
+                'product_name': 'Bifrutas Mediterranean',
+                'brands': 'Pascual',
+                'product_quantity': 330,
+                'product_quantity_unit': 'ml',
+                'nutriments': {
+                  'energy-kcal_100g': 25,
+                  'proteins_100g': 0.5,
+                  'carbohydrates_100g': 5.4,
+                  'fat_100g': 0,
+                },
+              },
+            ],
+          }),
+          200,
+        );
+      });
+
+      final localDs = FoodLocalDataSource(prefs, storage);
+      final remoteDs = FoodRemoteDataSource(
+        storage,
+        client: geminiClient,
+        delay: (_) async {},
+      );
+      final offDs = OpenFoodFactsDataSource(client: offClient);
+      final repo = FoodRepositoryImpl(
+        localDs,
+        remoteDs,
+        openFoodFacts: offDs,
+        barcodeCache: InMemoryBarcodeCacheDataSource(),
+      );
+
+      final result = await repo.detectFoodFromImage(testImageFile);
+      expect(result.isRight(), isTrue);
+      final food = result.getOrElse((_) => throw StateError('Right'));
+      expect(food.source, FoodSource.databaseMatch);
+      expect(food.calories, closeTo(82.5, 0.1));
+      expect(food.carbs, closeTo(17.8, 0.1));
     });
   });
 }

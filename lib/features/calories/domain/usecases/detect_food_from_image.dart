@@ -10,8 +10,16 @@ class DetectFoodFromImage {
   final FoodRepository _repo;
   DetectFoodFromImage(this._repo);
 
-  Future<Either<Failure, Food>> call(File image, {String? userHint}) {
-    return _repo.detectFoodFromImage(image, userHint: userHint);
+  Future<Either<Failure, Food>> call(
+    File image, {
+    String? userHint,
+    bool labelOnlyMode = false,
+  }) {
+    return _repo.detectFoodFromImage(
+      image,
+      userHint: userHint,
+      labelOnlyMode: labelOnlyMode,
+    );
   }
 }
 

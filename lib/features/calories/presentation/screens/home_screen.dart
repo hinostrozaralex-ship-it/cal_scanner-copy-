@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:cal_scanner/core/extensions/widget_extension.dart';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_cubit.dart';
 import 'package:cal_scanner/features/calories/presentation/cubit/food_log_state.dart';
+import 'package:cal_scanner/features/calories/presentation/screens/barcode_scanner_screen.dart';
 import 'package:cal_scanner/features/calories/presentation/screens/manual_meal_screen.dart';
 import 'package:cal_scanner/features/calories/presentation/screens/progress_screen.dart';
 import 'package:cal_scanner/features/calories/presentation/screens/scan_result_screen.dart';
@@ -27,17 +28,16 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _profileRefreshTick = 0;
   bool _isFabOpen = false;
+  bool _showCameraSubmenu = false;
 
   late final AnimationController _fabController;
+  late final AnimationController _cameraSubController;
   late final Animation<double> _scrimFade;
-  late final Animation<double> _firstOptionScale;
-  late final Animation<Offset> _firstOptionSlide;
-  late final Animation<double> _secondOptionScale;
-  late final Animation<Offset> _secondOptionSlide;
+  late final Animation<double> _fanCurve;
+  late final Animation<double> _subFanCurve;
 
   @override
   void initState() {
@@ -47,66 +47,63 @@ class _HomeScreenState extends State<HomeScreen>
       duration: const Duration(milliseconds: 280),
       reverseDuration: const Duration(milliseconds: 200),
     );
+    _cameraSubController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+      reverseDuration: const Duration(milliseconds: 180),
+    );
 
     _scrimFade = CurvedAnimation(
       parent: _fabController,
       curve: Curves.easeOut,
     );
-
-    _firstOptionScale = CurvedAnimation(
+    _fanCurve = CurvedAnimation(
       parent: _fabController,
-      curve: const Interval(0.0, 0.85, curve: Curves.easeOutBack),
+      curve: Curves.easeOutBack,
       reverseCurve: Curves.easeInCubic,
     );
-    _firstOptionSlide = Tween<Offset>(
-      begin: const Offset(0, 0.45),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _fabController,
-        curve: const Interval(0.0, 0.85, curve: Curves.easeOutBack),
-        reverseCurve: Curves.easeInCubic,
-      ),
-    );
-
-    _secondOptionScale = CurvedAnimation(
-      parent: _fabController,
-      curve: const Interval(0.15, 1.0, curve: Curves.easeOutBack),
+    _subFanCurve = CurvedAnimation(
+      parent: _cameraSubController,
+      curve: Curves.easeOutBack,
       reverseCurve: Curves.easeInCubic,
-    );
-    _secondOptionSlide = Tween<Offset>(
-      begin: const Offset(0, 0.55),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _fabController,
-        curve: const Interval(0.15, 1.0, curve: Curves.easeOutBack),
-        reverseCurve: Curves.easeInCubic,
-      ),
     );
   }
 
   @override
   void dispose() {
     _fabController.dispose();
+    _cameraSubController.dispose();
     super.dispose();
   }
 
   void _toggleFabMenu() {
-    setState(() {
-      _isFabOpen = !_isFabOpen;
-      if (_isFabOpen) {
-        _fabController.forward();
-      } else {
-        _fabController.reverse();
-      }
-    });
+    if (_isFabOpen) {
+      _closeFabMenu();
+    } else {
+      setState(() {
+        _isFabOpen = true;
+        _showCameraSubmenu = false;
+      });
+      _cameraSubController.reset();
+      _fabController.forward();
+    }
+  }
+
+  void _openCameraSubmenu() {
+    setState(() => _showCameraSubmenu = true);
+    _cameraSubController.forward();
   }
 
   Future<void> _closeFabMenu() async {
     if (!_isFabOpen) return;
     setState(() => _isFabOpen = false);
-    await _fabController.reverse();
+    await Future.wait([
+      _fabController.reverse(),
+      if (_showCameraSubmenu) _cameraSubController.reverse(),
+    ]);
+    if (mounted) {
+      setState(() => _showCameraSubmenu = false);
+    }
   }
 
   Future<void> _pickAndScanImage(
@@ -129,6 +126,18 @@ class _HomeScreenState extends State<HomeScreen>
         builder: (_) => BlocProvider.value(
           value: context.read<FoodLogCubit>(),
           child: ScanResultScreen(imageFile: file),
+        ),
+      ),
+    );
+  }
+
+  void _openBarcodeScanner(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlocProvider.value(
+          value: context.read<FoodLogCubit>(),
+          child: const BarcodeScannerScreen(),
         ),
       ),
     );
@@ -170,105 +179,6 @@ class _HomeScreenState extends State<HomeScreen>
         _profileRefreshTick++;
       });
     }
-  }
-
-  void _showImageSourceSelector(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.kWhite,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40.w,
-                height: 4.h,
-                decoration: BoxDecoration(
-                  color: AppColors.kBlack.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(4.r),
-                ),
-              ),
-              SizedBox(height: 14.h),
-              Text(
-                'Scan Food',
-                style: AppTypography.headlineSmall.copyWith(
-                  fontSize: 17.sp,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              SizedBox(height: 12.h),
-              ListTile(
-                leading: Container(
-                  padding: EdgeInsets.all(10.w),
-                  decoration: BoxDecoration(
-                    color: AppColors.kOrange.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  child: Icon(
-                    CupertinoIcons.camera_fill,
-                    color: AppColors.kOrange,
-                    size: 22.sp,
-                  ),
-                ),
-                title: Text(
-                  'Take a Photo',
-                  style: AppTypography.titleMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle: Text(
-                  'Use camera to scan your meal right now',
-                  style: AppTypography.bodySmall.copyWith(
-                    fontSize: 12.sp,
-                    color: AppColors.kBlack.withValues(alpha: 0.6),
-                  ),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickAndScanImage(context, ImageSource.camera);
-                },
-              ),
-              ListTile(
-                leading: Container(
-                  padding: EdgeInsets.all(10.w),
-                  decoration: BoxDecoration(
-                    color: AppColors.kBlack.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  child: Icon(
-                    CupertinoIcons.photo_fill,
-                    color: AppColors.kBlack,
-                    size: 22.sp,
-                  ),
-                ),
-                title: Text(
-                  'Choose from Gallery',
-                  style: AppTypography.titleMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle: Text(
-                  'Pick an existing photo from your device',
-                  style: AppTypography.bodySmall.copyWith(
-                    fontSize: 12.sp,
-                    color: AppColors.kBlack.withValues(alpha: 0.6),
-                  ),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickAndScanImage(context, ImageSource.gallery);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   @override
@@ -343,13 +253,23 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
 
-          // Animated scrim & centered speed-dial options
+          // Animated scrim & radial fan speed-dial menu
           AnimatedBuilder(
-            animation: _fabController,
+            animation: Listenable.merge([_fabController, _cameraSubController]),
             builder: (context, _) {
               if (_fabController.isDismissed) {
                 return const SizedBox.shrink();
               }
+
+              final fanT = _fanCurve.value.clamp(0.0, 1.2);
+              final subT = _subFanCurve.value.clamp(0.0, 1.2);
+              final level1Opacity =
+                  (_fabController.value * (1.0 - _cameraSubController.value))
+                      .clamp(0.0, 1.0);
+              final level2Opacity =
+                  (_fabController.value * _cameraSubController.value)
+                      .clamp(0.0, 1.0);
+
               return Stack(
                 children: [
                   Positioned.fill(
@@ -358,64 +278,84 @@ class _HomeScreenState extends State<HomeScreen>
                       child: FadeTransition(
                         opacity: _scrimFade,
                         child: Container(
-                          color: Colors.black.withValues(alpha: 0.28),
+                          color: Colors.black.withValues(alpha: 0.34),
                         ),
                       ),
                     ),
                   ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 20.h,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FadeTransition(
-                          opacity: _secondOptionScale,
-                          child: SlideTransition(
-                            position: _secondOptionSlide,
-                            child: ScaleTransition(
-                              scale: _secondOptionScale,
-                              child: _FabBubbleOption(
-                                label: 'Scan Food',
-                                icon: CupertinoIcons.camera_viewfinder,
-                                backgroundColor: AppColors.kOrange,
-                                iconColor: AppColors.kWhite,
-                                onTap: () async {
-                                  await _closeFabMenu();
-                                  if (context.mounted) {
-                                    _showImageSourceSelector(context);
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 12.h),
-                        FadeTransition(
-                          opacity: _firstOptionScale,
-                          child: SlideTransition(
-                            position: _firstOptionSlide,
-                            child: ScaleTransition(
-                              scale: _firstOptionScale,
-                              child: _FabBubbleOption(
-                                label: 'Manual Entry',
-                                icon: Icons.edit_note_rounded,
-                                backgroundColor: AppColors.kBlack,
-                                iconColor: AppColors.kWhite,
-                                onTap: () async {
-                                  await _closeFabMenu();
-                                  if (context.mounted) {
-                                    _openManualEntryScreen(context);
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+
+                  // Level 1: 3-option radial fan (Barcode, Camera, Manual)
+                  if (level1Opacity > 0.01) ...[
+                    _RadialFanItem(
+                      offset: Offset(-102.w * fanT, -26.h * fanT),
+                      scale: fanT * (1.0 - 0.35 * _cameraSubController.value),
+                      opacity: level1Opacity,
+                      icon: Icons.qr_code_scanner_rounded,
+                      label: 'Barcode',
+                      backgroundColor: Colors.green.shade600,
+                      onTap: () async {
+                        await _closeFabMenu();
+                        if (context.mounted) {
+                          _openBarcodeScanner(context);
+                        }
+                      },
                     ),
-                  ),
+                    _RadialFanItem(
+                      offset: Offset(0, -104.h * fanT),
+                      scale: fanT * (1.0 - 0.35 * _cameraSubController.value),
+                      opacity: level1Opacity,
+                      icon: CupertinoIcons.camera_fill,
+                      label: 'Camera',
+                      backgroundColor: AppColors.kOrange,
+                      onTap: _openCameraSubmenu,
+                    ),
+                    _RadialFanItem(
+                      offset: Offset(102.w * fanT, -26.h * fanT),
+                      scale: fanT * (1.0 - 0.35 * _cameraSubController.value),
+                      opacity: level1Opacity,
+                      icon: Icons.edit_note_rounded,
+                      label: 'Manual',
+                      backgroundColor: AppColors.kBlack,
+                      onTap: () async {
+                        await _closeFabMenu();
+                        if (context.mounted) {
+                          _openManualEntryScreen(context);
+                        }
+                      },
+                    ),
+                  ],
+
+                  // Level 2: Camera submenu (Take Photo, Select Photo)
+                  if (level2Opacity > 0.01) ...[
+                    _RadialFanItem(
+                      offset: Offset(-82.w * subT, -62.h * subT),
+                      scale: subT,
+                      opacity: level2Opacity,
+                      icon: CupertinoIcons.camera_viewfinder,
+                      label: 'Take Photo',
+                      backgroundColor: AppColors.kOrange,
+                      onTap: () async {
+                        await _closeFabMenu();
+                        if (context.mounted) {
+                          _pickAndScanImage(context, ImageSource.camera);
+                        }
+                      },
+                    ),
+                    _RadialFanItem(
+                      offset: Offset(82.w * subT, -62.h * subT),
+                      scale: subT,
+                      opacity: level2Opacity,
+                      icon: CupertinoIcons.photo_fill,
+                      label: 'Select Photo',
+                      backgroundColor: AppColors.kBlack,
+                      onTap: () async {
+                        await _closeFabMenu();
+                        if (context.mounted) {
+                          _pickAndScanImage(context, ImageSource.gallery);
+                        }
+                      },
+                    ),
+                  ],
                 ],
               );
             },
@@ -539,65 +479,94 @@ class _BottomNavAction extends StatelessWidget {
   }
 }
 
-class _FabBubbleOption extends StatelessWidget {
-  final String label;
+class _RadialFanItem extends StatelessWidget {
+  final Offset offset;
+  final double scale;
+  final double opacity;
   final IconData icon;
+  final String label;
   final Color backgroundColor;
-  final Color iconColor;
   final VoidCallback onTap;
 
-  const _FabBubbleOption({
-    required this.label,
+  const _RadialFanItem({
+    required this.offset,
+    required this.scale,
+    required this.opacity,
     required this.icon,
+    required this.label,
     required this.backgroundColor,
-    required this.iconColor,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 11.h),
-        decoration: BoxDecoration(
-          color: AppColors.kWhite,
-          borderRadius: BorderRadius.circular(30.r),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.14),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 34.w,
-              height: 34.w,
-              decoration: BoxDecoration(
-                color: backgroundColor,
-                shape: BoxShape.circle,
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 18.h,
+      child: Center(
+        child: Transform.translate(
+          offset: offset,
+          child: Opacity(
+            opacity: opacity,
+            child: Transform.scale(
+              scale: scale.clamp(0.0, 1.2),
+              child: GestureDetector(
+                onTap: onTap,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 54.w,
+                      height: 54.w,
+                      decoration: BoxDecoration(
+                        color: backgroundColor,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.22),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        icon,
+                        color: AppColors.kWhite,
+                        size: 24.sp,
+                      ),
+                    ),
+                    SizedBox(height: 6.h),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 10.w,
+                        vertical: 4.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.kWhite,
+                        borderRadius: BorderRadius.circular(12.r),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.12),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        label,
+                        style: AppTypography.bodySmall.copyWith(
+                          fontSize: 11.5.sp,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.kBlack,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Icon(
-                icon,
-                color: iconColor,
-                size: 18.sp,
-              ),
             ),
-            SizedBox(width: 10.w),
-            Text(
-              label,
-              style: AppTypography.titleSmall.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppColors.kBlack,
-                fontSize: 14.sp,
-              ),
-            ),
-            SizedBox(width: 4.w),
-          ],
+          ),
         ),
       ),
     );

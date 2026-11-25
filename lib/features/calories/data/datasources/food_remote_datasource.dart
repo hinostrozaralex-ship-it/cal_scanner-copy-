@@ -202,6 +202,7 @@ class FoodRemoteDataSource {
     required String base64Image,
     required String mimeType,
     String? userHint,
+    bool labelOnlyMode = false,
     Duration timeout = const Duration(seconds: 60),
     bool includeThinkingConfig = true,
   }) {
@@ -220,23 +221,46 @@ class FoodRemoteDataSource {
         ? '\nIMPORTANT USER HINT / CORRECTION:\nThe user states: "$trimmedHint".\nYou MUST prioritize this user correction/description to identify the food, its ingredients, and its quantities accurately (even if the image looks ambiguous).\n'
         : '';
 
-    return _client
-        .post(
-          url,
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey,
-          },
-          body: jsonEncode({
-            'contents': [
-              {
-                'parts': [
-                  {
-                    'text': '''
+    final promptText = labelOnlyMode
+        ? '''
+You are reading a packaged food NUTRITION FACTS LABEL photographed by the user.
+Return ONLY a valid raw JSON object (without markdown code blocks, backticks, or preamble) matching this schema:
+{
+  "is_food": boolean,
+  "name": string,
+  "brand": string or null,
+  "is_packaged": true,
+  "label_visible": boolean,
+  "non_food_message": string or null,
+  "ingredients": [
+    {
+      "name": string,
+      "amount": number,
+      "amount_unit": string,
+      "per_100_calories": number,
+      "per_100_protein": number,
+      "per_100_carbs": number,
+      "per_100_fat": number
+    }
+  ]
+}
+$hintSection
+Guidelines:
+- Copy the printed nutrition facts values per 100 g (or per 100 ml for liquids) LITERALLY as printed on the label. Do NOT estimate or round away decimals.
+- If the label only shows values per serving, convert them accurately to per 100 g / 100 ml using the printed serving size.
+- Set "label_visible" to true if a nutrition table is readable, false otherwise.
+- Set "amount" to the net package weight/volume printed on the label (e.g. 330 with "ml" or 200 with "g"), or 100 if not printed.
+- Include exactly 1 item in "ingredients" with the product name.
+- All per_100_* values are per 100 g or 100 ml, NEVER multiplied by amount.
+- Be consistent: the same image must always produce the same answer.
+'''
+        : '''
 Analyze the provided image and return ONLY a valid raw JSON object (without markdown code blocks, backticks, or preamble) matching this schema:
 {
   "is_food": boolean,
   "name": string,
+  "brand": string or null,
+  "is_packaged": boolean,
   "label_visible": boolean,
   "non_food_message": string or null,
   "ingredients": [
@@ -256,13 +280,29 @@ Guidelines:
 - Keep the food and ingredient names in the language of the user hint if provided, otherwise in English.
 - If the image shows a non-food item (and no user food hint overrides it), set is_food to false, ingredients to [], and provide a humorous, clever non_food_message related to what is visible.
 - If it is food, set is_food to true and non_food_message to null.
+- Set "is_packaged" to true if the photo shows a commercial packaged food/drink (box, bottle, carton, wrapper, can, yogurt cup, etc.), and false for cooked dishes, plates, restaurant meals, or loose fresh produce.
+- If "is_packaged" is true and a brand name is visible or recognizable, set "brand" to that brand name (otherwise null).
 - Break down the meal into its distinct edible components in the "ingredients" array (e.g., for "Chicken with Rice", list "Cooked Rice", "Grilled Chicken", "Salad", etc.). If it is a single item (e.g., an apple, a drink or a packaged product), include exactly 1 item in "ingredients".
 - All per_100_* values are per 100 g (or per 100 ml for liquids), NEVER for the whole portion. The app multiplies them by "amount" itself, so do not multiply or scale anything.
 - If a nutrition facts table is visible, set label_visible to true and copy its values per 100 g / 100 ml exactly as printed. If the table only lists values per serving, convert them to per 100 g / 100 ml using the serving size printed on the label.
 - If no nutrition table is visible, set label_visible to false and use the standard reference values per 100 g / 100 ml of that food (or of that exact product if you recognize the brand).
 - "amount" is the total quantity of that ingredient in the photo, with "amount_unit" being "g" or "ml". For a packaged product use the net weight or volume printed on the pack (for example 330 with "ml" for a 330 ml carton). Otherwise estimate the edible portion weight, rounded to the nearest 10 g (25 g for portions above 250 g).
 - Be consistent: the same image must always produce the same answer.
-''',
+''';
+
+    return _client
+        .post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: jsonEncode({
+            'contents': [
+              {
+                'parts': [
+                  {
+                    'text': promptText,
                   },
                   {
                     'inline_data': {
@@ -787,6 +827,20 @@ Guidelines:
       );
     }
 
+    final rawLabelVisible =
+        foodData['label_visible'] ?? foodData['labelVisible'];
+    final bool labelVisible = rawLabelVisible is bool
+        ? rawLabelVisible
+        : (rawLabelVisible?.toString().toLowerCase() == 'true');
+
+    final rawIsPackaged = foodData['is_packaged'] ?? foodData['isPackaged'];
+    final bool isPackaged = rawIsPackaged is bool
+        ? rawIsPackaged
+        : (rawIsPackaged?.toString().toLowerCase() == 'true');
+
+    final rawBrand = foodData['brand']?.toString().trim();
+    final brand = (rawBrand != null && rawBrand.isNotEmpty) ? rawBrand : null;
+
     return right(
       Food(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -807,6 +861,10 @@ Guidelines:
         baseFat: fat,
         nonFoodMessage: null,
         ingredients: parsedIngredients,
+        source: labelVisible ? FoodSource.aiLabel : FoodSource.aiEstimate,
+        brand: brand,
+        isPackaged: isPackaged,
+        labelVisible: labelVisible,
       ),
     );
   }
@@ -814,6 +872,7 @@ Guidelines:
   Future<Either<Failure, Food>> detectFoodAndCalories(
     File imageFile, {
     String? userHint,
+    bool labelOnlyMode = false,
   }) async {
     String apiKey = '';
     try {
@@ -870,6 +929,7 @@ Guidelines:
             base64Image: base64Image,
             mimeType: mimeType,
             userHint: userHint,
+            labelOnlyMode: labelOnlyMode,
             timeout: attemptTimeout,
           );
         } on TimeoutException catch (e) {
@@ -925,6 +985,7 @@ Guidelines:
                 base64Image: base64Image,
                 mimeType: mimeType,
                 userHint: userHint,
+                labelOnlyMode: labelOnlyMode,
                 timeout: retryRemaining < perAttemptTimeout
                     ? retryRemaining
                     : perAttemptTimeout,

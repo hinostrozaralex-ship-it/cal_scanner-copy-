@@ -5,15 +5,25 @@ import 'package:fpdart/fpdart.dart';
 import '../../../../core/error/failure.dart';
 import '../../domain/entities/food.dart';
 import '../../domain/repositories/food_repository.dart';
+import '../datasources/barcode_cache_datasource.dart';
 import '../datasources/food_local_datasource.dart';
 import '../datasources/food_remote_datasource.dart';
+import '../datasources/open_food_facts_datasource.dart';
 import '../models/food_model.dart';
 
 class FoodRepositoryImpl implements FoodRepository {
   final FoodLocalDataSource _local;
   final FoodRemoteDataSource _remote;
+  final OpenFoodFactsDataSource? _openFoodFacts;
+  final BarcodeCacheDataSource? _barcodeCache;
 
-  FoodRepositoryImpl(this._local, this._remote);
+  FoodRepositoryImpl(
+    this._local,
+    this._remote, {
+    OpenFoodFactsDataSource? openFoodFacts,
+    BarcodeCacheDataSource? barcodeCache,
+  }) : _openFoodFacts = openFoodFacts,
+       _barcodeCache = barcodeCache;
 
   @override
   Future<Either<Failure, List<Food>>> getDailyFoodLog(DateTime date) async {
@@ -70,8 +80,89 @@ class FoodRepositoryImpl implements FoodRepository {
   Future<Either<Failure, Food>> detectFoodFromImage(
     File image, {
     String? userHint,
-  }) {
-    return _remote.detectFoodAndCalories(image, userHint: userHint);
+    bool labelOnlyMode = false,
+  }) async {
+    final result = await _remote.detectFoodAndCalories(
+      image,
+      userHint: userHint,
+      labelOnlyMode: labelOnlyMode,
+    );
+
+    if (labelOnlyMode || _openFoodFacts == null) {
+      return result;
+    }
+
+    return result.fold(
+      (failure) => left(failure),
+      (food) async {
+        // Hybrid match: if Gemini recognized a packaged product without a
+        // visible nutrition label, cross-check against Open Food Facts.
+        if (food.isFood && food.isPackaged && !food.labelVisible) {
+          final dbMatch = await _openFoodFacts.searchProductByName(
+            food.name,
+            brand: food.brand,
+            preferredAmount: food.servingSize,
+            preferredUnit: food.servingUnit,
+          );
+          if (dbMatch != null) {
+            return right(
+              dbMatch.copyWith(
+                imageUrl: food.imageUrl ?? dbMatch.imageUrl,
+                timestamp: food.timestamp,
+              ),
+            );
+          }
+        }
+        return right(food);
+      },
+    );
+  }
+
+  @override
+  Future<Either<Failure, BarcodeLookupResult>> lookupFoodByBarcode(
+    String barcode,
+  ) async {
+    final cleanCode = barcode.trim();
+    if (cleanCode.isEmpty) {
+      return left(const NetworkFailure('Invalid barcode.'));
+    }
+
+    if (_barcodeCache != null) {
+      final cached = await _barcodeCache.getProduct(cleanCode);
+      if (cached != null) {
+        return right(
+          BarcodeLookupResult(
+            food: cached.copyWith(
+              barcode: cleanCode,
+              source: cached.source == FoodSource.aiEstimate
+                  ? FoodSource.barcode
+                  : cached.source,
+            ),
+            partialName: cached.name,
+            brand: cached.brand,
+          ),
+        );
+      }
+    }
+
+    final off = _openFoodFacts ?? OpenFoodFactsDataSource();
+    final remoteResult = await off.getProductByBarcode(cleanCode);
+
+    return remoteResult.fold(
+      (failure) => left(failure),
+      (lookup) async {
+        if (lookup.food != null && _barcodeCache != null) {
+          await _barcodeCache.saveProduct(cleanCode, lookup.food!);
+        }
+        return right(lookup);
+      },
+    );
+  }
+
+  @override
+  Future<void> cacheBarcodeProduct(String barcode, Food product) async {
+    if (_barcodeCache == null) return;
+    await _barcodeCache.saveProduct(barcode, product);
   }
 
   @override

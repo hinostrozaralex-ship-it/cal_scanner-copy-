@@ -15,7 +15,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class ManualMealScreen extends StatefulWidget {
-  const ManualMealScreen({super.key});
+  final String? initialName;
+  final String? associateBarcode;
+
+  const ManualMealScreen({
+    super.key,
+    this.initialName,
+    this.associateBarcode,
+  });
 
   @override
   State<ManualMealScreen> createState() => _ManualMealScreenState();
@@ -24,7 +31,7 @@ class ManualMealScreen extends StatefulWidget {
 class _ManualMealScreenState extends State<ManualMealScreen> {
   final TextEditingController _aiDescriptionController =
       TextEditingController();
-  final TextEditingController _mealNameController = TextEditingController();
+  late final TextEditingController _mealNameController;
   final TextEditingController _manualCaloriesController =
       TextEditingController(text: '0');
   final TextEditingController _manualProteinController =
@@ -38,6 +45,14 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
   bool _isGeneratingAi = false;
   String? _aiError;
   bool _isLogging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _mealNameController = TextEditingController(
+      text: widget.initialName ?? '',
+    );
+  }
 
   @override
   void dispose() {
@@ -198,6 +213,8 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
       timestamp: DateTime.now(),
       isFood: true,
       ingredients: finalIngredients,
+      barcode: widget.associateBarcode,
+      source: FoodSource.manual,
     );
 
     final cubit = context.read<FoodLogCubit>();
@@ -205,6 +222,10 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
     final navigator = Navigator.of(context);
 
     await cubit.addMeal(meal);
+    if (widget.associateBarcode != null &&
+        widget.associateBarcode!.trim().isNotEmpty) {
+      await cubit.cacheProductForBarcode(widget.associateBarcode!, meal);
+    }
     if (!mounted) return;
 
     navigator.pop();

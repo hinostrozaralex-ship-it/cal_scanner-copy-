@@ -21,8 +21,23 @@ import '../cubit/food_log_cubit.dart';
 import '../cubit/food_log_state.dart';
 
 class ScanResultScreen extends StatefulWidget {
-  final File imageFile;
-  const ScanResultScreen({super.key, required this.imageFile});
+  final File? imageFile;
+  final Food? initialFood;
+  final bool labelOnlyMode;
+  final String? associateBarcode;
+  final String? initialUserHint;
+
+  const ScanResultScreen({
+    super.key,
+    this.imageFile,
+    this.initialFood,
+    this.labelOnlyMode = false,
+    this.associateBarcode,
+    this.initialUserHint,
+  }) : assert(
+         imageFile != null || initialFood != null,
+         'Either imageFile or initialFood must be provided',
+       );
 
   @override
   State<ScanResultScreen> createState() => _ScanResultScreenState();
@@ -30,7 +45,7 @@ class ScanResultScreen extends StatefulWidget {
 
 class _ScanResultScreenState extends State<ScanResultScreen> {
   bool _dialogShown = false;
-  late File _currentImageFile;
+  File? _currentImageFile;
   Food? _meal;
   List<FoodIngredient> _ingredients = [];
   String? _error;
@@ -151,6 +166,8 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   }
 
   void _handleReanalyzeWithHint() {
+    final imageFile = _currentImageFile;
+    if (imageFile == null) return;
     final hint = _hintController.text.trim();
     if (hint.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -167,9 +184,11 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     }
     FocusScope.of(context).unfocus();
     context.read<FoodLogCubit>().addMealFromImage(
-          _currentImageFile,
-          userHint: hint,
-        );
+      imageFile,
+      userHint: hint,
+      labelOnlyMode: widget.labelOnlyMode,
+      associateBarcode: widget.associateBarcode,
+    );
   }
 
   Future<void> _handleTryAgain() async {
@@ -190,7 +209,11 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           _ingredients = [];
           _error = null;
         });
-        context.read<FoodLogCubit>().addMealFromImage(newFile);
+        context.read<FoodLogCubit>().addMealFromImage(
+          newFile,
+          labelOnlyMode: widget.labelOnlyMode,
+          associateBarcode: widget.associateBarcode,
+        );
       } else {
         Navigator.of(context).pop();
       }
@@ -265,6 +288,10 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     final navigator = Navigator.of(context);
 
     await cubit.addMeal(loggedMeal);
+    final barcodeToCache = widget.associateBarcode ?? loggedMeal.barcode;
+    if (barcodeToCache != null && barcodeToCache.trim().isNotEmpty) {
+      await cubit.cacheProductForBarcode(barcodeToCache, loggedMeal);
+    }
     if (!mounted) return;
 
     navigator.pop();
@@ -284,11 +311,27 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   void initState() {
     super.initState();
     _currentImageFile = widget.imageFile;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _scanStarted) return;
+    if (widget.initialFood != null) {
+      final initial = widget.initialFood!;
+      final initialQty =
+          initial.servingSize > 0 ? initial.servingSize : 100.0;
+      _meal = initial;
+      _ingredients = List<FoodIngredient>.from(initial.ingredients);
+      _currentQuantity = initialQty;
+      _quantityController.text = _formatQuantity(initialQty);
       _scanStarted = true;
-      context.read<FoodLogCubit>().addMealFromImage(_currentImageFile);
-    });
+    } else if (_currentImageFile != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _scanStarted) return;
+        _scanStarted = true;
+        context.read<FoodLogCubit>().addMealFromImage(
+          _currentImageFile!,
+          userHint: widget.initialUserHint,
+          labelOnlyMode: widget.labelOnlyMode,
+          associateBarcode: widget.associateBarcode,
+        );
+      });
+    }
   }
 
   @override
@@ -409,9 +452,10 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                           Center(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(20.r),
-                              child: _currentImageFile.existsSync()
+                              child: _currentImageFile != null &&
+                                      _currentImageFile!.existsSync()
                                   ? Image.file(
-                                      _currentImageFile,
+                                      _currentImageFile!,
                                       height: 200.h,
                                       width: 180.w,
                                       fit: BoxFit.cover,
@@ -504,22 +548,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                           Center(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: _currentImageFile.existsSync()
-                                  ? Image.file(
-                                      _currentImageFile,
-                                      height: 130.h,
-                                      width: 120.w,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Container(
-                                      height: 130.h,
-                                      width: 120.w,
-                                      color: AppColors.kPrimaryGrey,
-                                      child: const Icon(
-                                        Icons.fastfood_outlined,
-                                        size: 40,
-                                      ),
-                                    ),
+                              child: _buildMealHeaderImage(meal),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -534,6 +563,8 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                               ),
                             ),
                           ),
+                          SizedBox(height: 6.h),
+                          _SourceConfidenceBadge(source: meal.source),
                           14.kH,
                           Text(
                             calcCalories.toStringAsFixed(0),
@@ -556,15 +587,17 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // AI Suggestion / Refine Card
-                          Padding(
-                            padding: pagePadding,
-                            child: _AiRefineHintCard(
-                              controller: _hintController,
-                              onReanalyze: _handleReanalyzeWithHint,
+                          // AI Suggestion / Refine Card (only for photo scans)
+                          if (_currentImageFile != null) ...[
+                            Padding(
+                              padding: pagePadding,
+                              child: _AiRefineHintCard(
+                                controller: _hintController,
+                                onReanalyze: _handleReanalyzeWithHint,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
+                            const SizedBox(height: 16),
+                          ],
 
                           // Ingredients Breakdown & Editor
                           Padding(
@@ -691,6 +724,94 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           ),
         );
       },
+    );
+  }
+  Widget _buildMealHeaderImage(Food meal) {
+    final file = _currentImageFile;
+    if (file != null && file.existsSync()) {
+      return Image.file(
+        file,
+        height: 130.h,
+        width: 120.w,
+        fit: BoxFit.cover,
+      );
+    }
+    final url = meal.imageUrl?.trim();
+    if (url != null && url.startsWith('http')) {
+      return Image.network(
+        url,
+        height: 130.h,
+        width: 120.w,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _imagePlaceholder(),
+      );
+    }
+    return _imagePlaceholder();
+  }
+
+  Widget _imagePlaceholder() {
+    return Container(
+      height: 130.h,
+      width: 120.w,
+      color: AppColors.kPrimaryGrey,
+      child: const Icon(
+        Icons.fastfood_outlined,
+        size: 40,
+      ),
+    );
+  }
+}
+
+class _SourceConfidenceBadge extends StatelessWidget {
+  final String source;
+  const _SourceConfidenceBadge({required this.source});
+
+  @override
+  Widget build(BuildContext context) {
+    final (String label, IconData icon, Color color) = switch (source) {
+      FoodSource.barcode => (
+        'Verified • Barcode',
+        Icons.verified_rounded,
+        Colors.green.shade700,
+      ),
+      FoodSource.databaseMatch => (
+        'Verified • Open Food Facts',
+        Icons.verified_rounded,
+        Colors.green.shade700,
+      ),
+      FoodSource.aiLabel => (
+        'Nutrition Label • AI',
+        Icons.document_scanner_rounded,
+        const Color(0xFF2E7D9B),
+      ),
+      _ => (
+        'Estimated • AI',
+        Icons.auto_awesome,
+        AppColors.kOrange,
+      ),
+    };
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20.r),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13.sp, color: color),
+          SizedBox(width: 5.w),
+          Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              fontSize: 11.5.sp,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -128,6 +128,14 @@ class FoodIngredient {
   }
 }
 
+class FoodSource {
+  static const String barcode = 'barcode';
+  static const String databaseMatch = 'database_match';
+  static const String aiLabel = 'ai_label';
+  static const String aiEstimate = 'ai_estimate';
+  static const String manual = 'manual';
+}
+
 class Food {
   final String id;
   final String name;
@@ -147,6 +155,11 @@ class Food {
   final double baseFat;
   final String? nonFoodMessage;
   final List<FoodIngredient> ingredients;
+  final String? barcode;
+  final String source;
+  final String? brand;
+  final bool isPackaged;
+  final bool labelVisible;
 
   const Food({
     required this.id,
@@ -167,6 +180,11 @@ class Food {
     double? baseFat,
     this.nonFoodMessage,
     this.ingredients = const [],
+    this.barcode,
+    this.source = FoodSource.aiEstimate,
+    this.brand,
+    this.isPackaged = false,
+    this.labelVisible = false,
   }) : servingSize = servingSize ?? (quantity > 0 ? quantity : 100.0),
        baseCalories = baseCalories ?? calories,
        baseProtein = baseProtein ?? protein,
@@ -192,6 +210,11 @@ class Food {
     double? baseFat,
     String? nonFoodMessage,
     List<FoodIngredient>? ingredients,
+    String? barcode,
+    String? source,
+    String? brand,
+    bool? isPackaged,
+    bool? labelVisible,
   }) {
     return Food(
       id: id ?? this.id,
@@ -212,6 +235,11 @@ class Food {
       baseFat: baseFat ?? this.baseFat,
       nonFoodMessage: nonFoodMessage ?? this.nonFoodMessage,
       ingredients: ingredients ?? this.ingredients,
+      barcode: barcode ?? this.barcode,
+      source: source ?? this.source,
+      brand: brand ?? this.brand,
+      isPackaged: isPackaged ?? this.isPackaged,
+      labelVisible: labelVisible ?? this.labelVisible,
     );
   }
 }
