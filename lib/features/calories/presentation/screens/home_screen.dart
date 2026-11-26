@@ -270,93 +270,110 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   (_fabController.value * _cameraSubController.value)
                       .clamp(0.0, 1.0);
 
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: GestureDetector(
-                      onTap: _closeFabMenu,
-                      child: FadeTransition(
-                        opacity: _scrimFade,
-                        child: Container(
-                          color: Colors.black.withValues(alpha: 0.34),
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final centerX = constraints.maxWidth / 2;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _closeFabMenu,
+                          child: FadeTransition(
+                            opacity: _scrimFade,
+                            child: Container(
+                              color: Colors.black.withValues(alpha: 0.34),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
 
-                  // Level 1: 3-option radial fan (Barcode, Camera, Manual)
-                  if (level1Opacity > 0.01) ...[
-                    _RadialFanItem(
-                      offset: Offset(-102.w * fanT, -26.h * fanT),
-                      scale: fanT * (1.0 - 0.35 * _cameraSubController.value),
-                      opacity: level1Opacity,
-                      icon: Icons.qr_code_scanner_rounded,
-                      label: 'Barcode',
-                      backgroundColor: Colors.green.shade600,
-                      onTap: () async {
-                        await _closeFabMenu();
-                        if (context.mounted) {
-                          _openBarcodeScanner(context);
-                        }
-                      },
-                    ),
-                    _RadialFanItem(
-                      offset: Offset(0, -104.h * fanT),
-                      scale: fanT * (1.0 - 0.35 * _cameraSubController.value),
-                      opacity: level1Opacity,
-                      icon: CupertinoIcons.camera_fill,
-                      label: 'Camera',
-                      backgroundColor: AppColors.kOrange,
-                      onTap: _openCameraSubmenu,
-                    ),
-                    _RadialFanItem(
-                      offset: Offset(102.w * fanT, -26.h * fanT),
-                      scale: fanT * (1.0 - 0.35 * _cameraSubController.value),
-                      opacity: level1Opacity,
-                      icon: Icons.edit_note_rounded,
-                      label: 'Manual',
-                      backgroundColor: AppColors.kBlack,
-                      onTap: () async {
-                        await _closeFabMenu();
-                        if (context.mounted) {
-                          _openManualEntryScreen(context);
-                        }
-                      },
-                    ),
-                  ],
+                      // Level 1: 3-option radial fan (Barcode, Camera, Manual)
+                      if (level1Opacity > 0.01) ...[
+                        _RadialFanItem(
+                          centerX: centerX,
+                          dx: -102.w * fanT,
+                          dy: 26.h * fanT,
+                          scale:
+                              fanT * (1.0 - 0.35 * _cameraSubController.value),
+                          opacity: level1Opacity,
+                          ignoring: _showCameraSubmenu,
+                          icon: Icons.qr_code_scanner_rounded,
+                          label: 'Barcode',
+                          backgroundColor: Colors.green.shade600,
+                          onTap: () {
+                            _closeFabMenu();
+                            _openBarcodeScanner(context);
+                          },
+                        ),
+                        _RadialFanItem(
+                          centerX: centerX,
+                          dx: 0,
+                          dy: 104.h * fanT,
+                          scale:
+                              fanT * (1.0 - 0.35 * _cameraSubController.value),
+                          opacity: level1Opacity,
+                          ignoring: _showCameraSubmenu,
+                          icon: CupertinoIcons.camera_fill,
+                          label: 'Camera',
+                          backgroundColor: AppColors.kOrange,
+                          onTap: _openCameraSubmenu,
+                        ),
+                        _RadialFanItem(
+                          centerX: centerX,
+                          dx: 102.w * fanT,
+                          dy: 26.h * fanT,
+                          scale:
+                              fanT * (1.0 - 0.35 * _cameraSubController.value),
+                          opacity: level1Opacity,
+                          ignoring: _showCameraSubmenu,
+                          icon: Icons.edit_note_rounded,
+                          label: 'Manual',
+                          backgroundColor: AppColors.kBlack,
+                          onTap: () {
+                            _closeFabMenu();
+                            _openManualEntryScreen(context);
+                          },
+                        ),
+                      ],
 
-                  // Level 2: Camera submenu (Take Photo, Select Photo)
-                  if (level2Opacity > 0.01) ...[
-                    _RadialFanItem(
-                      offset: Offset(-82.w * subT, -62.h * subT),
-                      scale: subT,
-                      opacity: level2Opacity,
-                      icon: CupertinoIcons.camera_viewfinder,
-                      label: 'Take Photo',
-                      backgroundColor: AppColors.kOrange,
-                      onTap: () async {
-                        await _closeFabMenu();
-                        if (context.mounted) {
-                          _pickAndScanImage(context, ImageSource.camera);
-                        }
-                      },
-                    ),
-                    _RadialFanItem(
-                      offset: Offset(82.w * subT, -62.h * subT),
-                      scale: subT,
-                      opacity: level2Opacity,
-                      icon: CupertinoIcons.photo_fill,
-                      label: 'Select Photo',
-                      backgroundColor: AppColors.kBlack,
-                      onTap: () async {
-                        await _closeFabMenu();
-                        if (context.mounted) {
-                          _pickAndScanImage(context, ImageSource.gallery);
-                        }
-                      },
-                    ),
-                  ],
-                ],
+                      // Level 2: Camera submenu (Take Photo, Select Photo)
+                      if (level2Opacity > 0.01) ...[
+                        _RadialFanItem(
+                          centerX: centerX,
+                          dx: -84.w * subT,
+                          dy: 62.h * subT,
+                          scale: subT,
+                          opacity: level2Opacity,
+                          ignoring: !_showCameraSubmenu,
+                          icon: CupertinoIcons.camera_viewfinder,
+                          label: 'Take Photo',
+                          backgroundColor: AppColors.kOrange,
+                          onTap: () {
+                            _closeFabMenu();
+                            _pickAndScanImage(context, ImageSource.camera);
+                          },
+                        ),
+                        _RadialFanItem(
+                          centerX: centerX,
+                          dx: 84.w * subT,
+                          dy: 62.h * subT,
+                          scale: subT,
+                          opacity: level2Opacity,
+                          ignoring: !_showCameraSubmenu,
+                          icon: CupertinoIcons.photo_fill,
+                          label: 'Select Photo',
+                          backgroundColor: AppColors.kBlack,
+                          onTap: () {
+                            _closeFabMenu();
+                            _pickAndScanImage(context, ImageSource.gallery);
+                          },
+                        ),
+                      ],
+                    ],
+                  );
+                },
               );
             },
           ),
@@ -480,18 +497,24 @@ class _BottomNavAction extends StatelessWidget {
 }
 
 class _RadialFanItem extends StatelessWidget {
-  final Offset offset;
+  final double centerX;
+  final double dx;
+  final double dy;
   final double scale;
   final double opacity;
+  final bool ignoring;
   final IconData icon;
   final String label;
   final Color backgroundColor;
   final VoidCallback onTap;
 
   const _RadialFanItem({
-    required this.offset,
+    required this.centerX,
+    required this.dx,
+    required this.dy,
     required this.scale,
     required this.opacity,
+    required this.ignoring,
     required this.icon,
     required this.label,
     required this.backgroundColor,
@@ -500,25 +523,28 @@ class _RadialFanItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final itemWidth = 98.w;
     return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 18.h,
-      child: Center(
-        child: Transform.translate(
-          offset: offset,
-          child: Opacity(
-            opacity: opacity,
-            child: Transform.scale(
-              scale: scale.clamp(0.0, 1.2),
-              child: GestureDetector(
-                onTap: onTap,
+      left: (centerX + dx) - (itemWidth / 2),
+      bottom: 18.h + dy,
+      width: itemWidth,
+      child: IgnorePointer(
+        ignoring: ignoring,
+        child: Opacity(
+          opacity: opacity,
+          child: Transform.scale(
+            scale: scale.clamp(0.0, 1.2),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 4.h),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 54.w,
-                      height: 54.w,
+                      width: 56.w,
+                      height: 56.w,
                       decoration: BoxDecoration(
                         color: backgroundColor,
                         shape: BoxShape.circle,
@@ -533,7 +559,7 @@ class _RadialFanItem extends StatelessWidget {
                       child: Icon(
                         icon,
                         color: AppColors.kWhite,
-                        size: 24.sp,
+                        size: 25.sp,
                       ),
                     ),
                     SizedBox(height: 6.h),
@@ -555,6 +581,9 @@ class _RadialFanItem extends StatelessWidget {
                       ),
                       child: Text(
                         label,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTypography.bodySmall.copyWith(
                           fontSize: 11.5.sp,
                           fontWeight: FontWeight.w700,
